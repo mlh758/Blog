@@ -1,5 +1,5 @@
 # The URL the site will be built for
-base_url = "https://webshit.site"
+base_url = "https://webshittery.com"
 theme = "oceanic-zen"
 
 # Whether to automatically compile all Sass files in the sass directory
