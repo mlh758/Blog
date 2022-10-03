@@ -204,8 +204,8 @@ So we were in the `Validating` state and the user started typing again. Yup, we 
 
 Ah right, we also weren't handling the error case. (I actually had to run it two more times for this to pop up)
 
-These may have been to you given how brief the spec was, but that's kind of the point. Without the clutter of implementation it's pretty clear that there are still events we need to handle.
-Starting with this you have a better baseline for what to write. Let's keep going.
+These may have been obvious to you given how brief the spec was, but that's kind of the point. Without the clutter of implementation it's pretty clear that there are still events we need to handle.
+Starting with this, you have a better baseline for what to write. Let's keep going.
 
 ### Handling the first errors
 
