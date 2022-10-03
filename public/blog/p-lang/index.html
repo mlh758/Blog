@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        
+
+        <title></title>
+
+        
+            <link rel="stylesheet" href="https://webshittery.com/theme.css">
+        
+        
+    </head>
+    <body>
+        <div class="content">
+        
+        
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;webshittery.com" class="logo"></a>
+                </div>
+                <div class="header-right">
+                    <nav itemscope itemtype="http://schema.org/SiteNavigationElement">
+                      <ul>
+                        
+                        
+                            
+                            <li class="nav">
+                                <a itemprop="url" href="https://webshittery.com/blog/">
+                                    <span itemprop="name">Blog</span>
+                                </a>
+                            </li>
+                        
+                        
+                        <li class="nav">
+                            <a itemprop="url" href="https://github.com/mlh758">
+                                <img class="icon" src="https:&#x2F;&#x2F;webshittery.com/icons/github.svg" alt="Github">
+                            </a>
+                        </li>
+                        
+                        
+                      </ul>
+                    </nav>
+                </div>
+            </header>
+        
+        
+        <main>
+            
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div itemprop="headline">
+        <h1>Covering your components with P</h1>
+        <div class="border"></div>
+        <time datetime="2022-10-02" class="date" itemprop="datePublished">
+            02 Oct 2022
+        </time>
+    </div>
+    <div itemprop="articleBody">
+        <p>P is a <a href="https://www.microsoft.com/en-us/research/blog/p-programming-language-asynchrony/">programming language</a> designed to model other computer programs. 
+It's similar to TLA+ in that you are working at a much higher level of abstraction than the final program. P provides a formal specification of the program
+or protocol that is helpful both as a thinking aid and a mechanism for checking correctness.
+This helps you find bugs <em>very</em> early, when you're still thinking about how you are going to design something.
+It can also serve as a description of what the code you are modeling is <em>supposed to be doing</em> when you or someone else comes back to it later. P diverges from TLA+ in two important ways:</p>
+<ol>
+<li>TLA+ is more about proving correctness and will search the entire possible state space if you let it. P will search a limited
+subspace of possible states.</li>
+<li>I can actually understand what's going on in a P program.</li>
+</ol>
+<p>No offense to Leslie Lamport on this one, but TLA+'s way of describing a system is less approachable to me since I don't
+usually think about the code I'm writing in mathematical terms. I don't think I'm alone in finding the syntax and tools to be abstruse. TLA+ added PlusCal to give a different syntax
+that might be more approachable but having to essentially write it as a giant code comment in a TLA file makes it feel very second-class. I also picked up <em>Practical TLA+: Planning Driven Development</em>
+as an alternative source for learning TLA+ and found that the book had to include a substantial module of their own to make working with the built-in data types easier. I'm on board with
+wanting a way to describe my programs that can help me find design bugs but TLA+ has been an uphill battle. I still highly recommend you check out the <a href="https://www.youtube.com/channel/UCajiu4Cj_GHOX0if3Up-eRA">video series</a>
+on TLA+ at some point, it might spark some interest for you. It's been hugely influential in proving the correctness of distributed protocols like Paxos.</p>
+<p>P takes a more familiar approach to modeling that is based around state machines communicating with events. You declare a set of machines, their states, the events in the system, and start filling in the
+state machine definitions. Events are asynchronous and the mailboxes of machines are unbounded. You can declare new instances of machines at runtime. The model checker will explore many combinations of
+states and events that you describe as valid while looking for issues. You provide test machines that assert correctness and liveness properties that the checker uses to check the validity of your spec as it runs.</p>
+<p>When I'm thinking about my programs at a high level, actors passing messages is a natural abstraction for me.
+In many ways that's object oriented code described in the simplest terms, hence Smalltalk. If any of this sounds a bit like Erlang/Elixir to you, we'd probably be friends.</p>
+<p>You can find all the spec code for this post <a href="https://github.com/mlh758/blog_p_spec">here</a> if you want to follow along with the final version.</p>
+<h2 id="boring-workaday-uses">Boring, workaday uses</h2>
+<p>As you might have assumed from the name of this website, I end up writing a lot of React components for my day job. In many ways, a React component functions as a tiny distributed system. If you call out to any services in your
+component you have at least 3 actors in your system:</p>
+<ol>
+<li>A user who can decide to do just about anything at any given moment</li>
+<li>Your JavaScript which has to respond to user events and communicate with a remote service</li>
+<li>Whatever that remote service is which hopefully gives you the data you want, might return errors, and might be behind a firewall that decides to quietly
+drop all the requests you're sending without providing a response.</li>
+</ol>
+<p>Taking a little time to think through how those actors communicate, what states your code might pass through to provide the user meaningful feedback, and how you handle the various responses
+from the remote service, can save you a lot of headache later. Starting with an awareness of most of those issues will give you more legible code in the end and your future self or coworkers
+will probably be grateful.</p>
+<p>It might seem like a lot of work to start with a P model before writing code but it can give you quick feedback on if you've accounted for all the scenarios you care about and the states you
+end up with in a P program are likely to correspond nicely with the states of the final component. This is especially true if you use TypeScript and use union types in your component state.</p>
+<h2 id="how-to-p">How to P</h2>
+<p>The <a href="https://p-org.github.io/P/tutsoutline/">official docs</a> are of course your best resource but here's a crash course so you can follow along.</p>
+<ul>
+<li>P programs are collections of P source files like <code>whatever.p</code>.</li>
+<li>Your life will be easier if you create a <code>something.pproj</code> file that defines the directories that contain the source files. <a href="https://github.com/p-org/P/blob/438182d2689c608b961594c862e7f7874382ab07/Tutorial/1_ClientServer/ClientServer.pproj">example</a></li>
+<li>You build a P program with <code>pc -proj:something.pproj</code> which will dump a bunch of stuff in a POutput directory.</li>
+<li>Run the spec with <code>coyote test ./POutput/dotnetnonsense/something.dll</code> where <code>dotnetnonsense</code>
+is the dotnet version it's working with (probably netcoreapp3.1) and <code>something.dll</code> is your project name. It's <code>.dll</code> even on Mac and Linux. Microsoft don't care.</li>
+<li>Most programs will at least have a ./PSrc directory with the definitions of your state machines and a ./PTst file that defines the different test cases.</li>
+<li>The simplest test case that works looks is basically what this blog post is going to be running on. It'll look something like this:
+<code>test ReactComponent [main=User]: {User,Component};</code>. It's the <code>test</code> keyword followed by a name for the test that you can provide.
+<code>[main=&lt;...&gt;]</code> is saying &quot;the main state machine that kicks everything off is ...&quot;. Then you provide the list of definitions needed. This is likely to just be the list of machines used
+in the test but there is also a module system to substitute complex machines for simple substitutes if you need to limit the state search space.</li>
+</ul>
+<p>In the official docs you can find a more complex test set definition <a href="https://github.com/p-org/P/blob/438182d2689c608b961594c862e7f7874382ab07/Tutorial/1_ClientServer/PTst/Testscript.p">here</a> where
+test machines are defined that provide different scenarios to run through. This also shows the module/substitution system in action.</p>
+<p>Machines communicate by passing events asynchronously. There are mechanisms for non-determinism which provide branching points in the state space to be searched. These arbitrary decision points are like a user
+rampaging through all the weird edge cases in your application as fast as they can and are really helpful for uncovering subtle concurrency issues. Where a unit or integration test defines a specific scenario
+and makes assertions about it, a model defines the scope of possible actions. The spec then defines properties that must hold while the system executes. Tests in this way are much more exploratory.</p>
+<p>Correctness can be enforced <em>within</em> your state machines with the <code>assert</code> keyword.
+You can also provide monitor machines defined as <code>spec SomeMachineName observes e1, e2, e3... {}</code>. These are also just state machines but they can see events other machines are sending and assert errors too.
+These monitor machines assert liveness by entering a state annotated with <code>hot</code>. If a monitor stays in a hot state for too long, the test will fail with a liveness error. Hot states ensure your program is making
+progress rather than just passing by ignoring all the events.</p>
+<h3 id="the-most-basic-example">The most basic example</h3>
+<p>At my day job there was recently a project to create a React component that accepts a user's IBAN (International Bank Account Number) and extract the BIC (Business Identifier Code) while
+validating that the IBAN is structurally correct. There is an IBAN API that provides this information so when the user enters an IBAN into the input, send that to the API and don't let them submit the form
+with a bad IBAN. If the IBAN API is misbehaving, we should fail open and just use a basic format validation while letting the user enter their BIC manually. I didn't implement this component,
+and this post is in no way a criticism of the implementation. This simplified description happens to be <em>just complicated enough</em> to make an informative P program without being <em>so complicated</em>
+that I give up on writing this blog post.</p>
+<p>The user is basically the driver of our fledgling test system. They interact with the system by typing into the input. We're assigning an ID to their messages so we can assert on the order later. Instead of actually sending some text, let's just say whether it's long enough to validate or not. Here's the User machine:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine User {
+</span><span>  var component: Component;
+</span><span>  var reqId: int;
+</span><span>  start state Init {
+</span><span>    entry {
+</span><span>      component = new Component();
+</span><span>      reqId = 0;
+</span><span>      goto Typing;
+</span><span>    }
+</span><span>  }
+</span><span>
+</span><span>  state Typing {
+</span><span>    on null do {
+</span><span>      var longEnough: bool;
+</span><span>      // $$ means arbitrarily choose one or the other but eventually try both branches
+</span><span>      if($$) {
+</span><span>        longEnough = true;
+</span><span>      } else {
+</span><span>        longEnough = false;
+</span><span>      }
+</span><span>      send component, eOnInput, (id = reqId, longEnough = longEnough);
+</span><span>      reqId = reqId + 1;
+</span><span>    }
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>The <code>start</code> state here initializes the user with a component to interact with and then sets them off to type into it. The typing state is randomly choosing whether to send a plausible IBAN which should trigger validation.</p>
+<p>Next up let's define the server the component will talk to. It receives a validation request and does one of 4 things:</p>
+<ol>
+<li>Returns a status indicating the IBAN is valid</li>
+<li>Returns a status indicating the IBAN is <em>not</em> valid</li>
+<li>Returns an error</li>
+<li>Drops the request on the floor and never responds (skipped for brevity)</li>
+</ol>
+<p>Here's the definition:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine Server {
+</span><span>  start state Serving {
+</span><span>    on eValidationRequest do (req: ValidationRequest) {
+</span><span>      if ($) {
+</span><span>        if ($) {
+</span><span>          send req.comp, eValidationResult, (id = req.id, valid = true);
+</span><span>        } else {
+</span><span>          send req.comp, eValidationResult, (id = req.id, valid = false);
+</span><span>        }
+</span><span>      } else {
+</span><span>        send req.comp, eValidationError, req.id;
+</span><span>      }
+</span><span>    }
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>Notice this uses <code>$</code> instead of <code>$$</code>. This is <em>unfair</em> indeterminism which means it might <em>never</em> return a valid response or <em>always</em> return an error in response to requests.</p>
+<p>Alright, it's time to start iterating on the actual component! We're going to start with something that's obviously wrong and build it up. I want to illustrate some of the errors the model checker can show you.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine Component {
+</span><span>  var server: Server;
+</span><span>  start state Init {
+</span><span>    entry  {
+</span><span>      server = new Server();
+</span><span>      goto Waiting;
+</span><span>    }
+</span><span>  }
+</span><span>  state Waiting {
+</span><span>    on eInput do (input: InputMessage) {
+</span><span>      if (input.longEnough) {
+</span><span>        send server, eValidationRequest, (comp = this, id = input.id);
+</span><span>        goto Validating;
+</span><span>      }
+</span><span>    }
+</span><span>  }
+</span><span>  state Validating {
+</span><span>    on eValidationResult do (result: ValidationResult) {
+</span><span>      if (result.valid) {
+</span><span>        goto Valid;
+</span><span>      } else {
+</span><span>        goto Invalid;
+</span><span>      }
+</span><span>    }
+</span><span>  }
+</span><span>  state Valid {
+</span><span>    ignore eInput;
+</span><span>  }
+</span><span>  state Invalid {
+</span><span>    ignore eInput;
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>When <code>Component</code> initializes it creates a server to talk to then transitions to waiting. If it receives a message that could plausibly be an IBAN it calls out to the server by requesting validation.
+If it's valid, go to the valid state and likewise with invalid. For now those states ignore all further input which represents the user being stuck. What happens when we run this?</p>
+<p>Running with: <code>coyote test ./POutput/netcoreapp3.1/iban.dll</code></p>
+<p>We get:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>...
+</span><span>&lt;SendLog&gt; &#39;PImplementation.User(2)&#39; in state &#39;Typing&#39; sent event &#39;eInput with payload (&lt;id:0, longEnough:True, &gt;)&#39; to &#39;Component(3)&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Server(4)&#39; dequeued event &#39;eValidationRequest with payload (&lt;comp:Component(3), id:0, &gt;)&#39; in state &#39;Serving&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Component(3)&#39; dequeued event &#39;eInput with payload (&lt;id:0, longEnough:True, &gt;)&#39; in state &#39;Validating&#39;.
+</span><span>&lt;StateLog&gt; Component(3) exits state &#39;Validating&#39;.
+</span><span>&lt;PopLog&gt; &#39;Component(3)&#39; popped with unhandled event &#39;eInput with payload (&lt;id:0, longEnough:True, &gt;)&#39; and reentered state &#39;Validating.
+</span><span>&lt;ExceptionLog&gt; Component(3) running action &#39;&#39; in state &#39;Validating&#39; threw exception &#39;UnhandledEventException&#39;.
+</span><span>&lt;ErrorLog&gt; Component(3) received event &#39;PImplementation.eInput&#39; that cannot be handled.
+</span></code></pre>
+<p>So we were in the <code>Validating</code> state and the user began typing again. Yup, we should probably account for that. Let's try running it again and see what we get.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>...
+</span><span>&lt;ExceptionLog&gt; Component(3) running action &#39;&#39; in state &#39;Validating&#39; threw exception &#39;UnhandledEventException&#39;.
+</span><span>&lt;ErrorLog&gt; Component(3) received event &#39;PImplementation.eValidationError&#39; that cannot be handled.
+</span></code></pre>
+<p>Ah right, we also weren't handling the error case. (I actually had to run it two more times for this to pop up)</p>
+<p>These may have been obvious to you given how brief the spec was, but that's kind of the point. Without the clutter of implementation it's pretty clear that there are still events we need to handle.
+Starting with this, you have a better baseline for what to write. Let's keep going.</p>
+<h3 id="handling-the-first-errors">Handling the first errors</h3>
+<p>When the more comprehensive remote validation fails, we should fall back to the less reliable local validation. Let's add states for that now.
+I'm going to rename the <code>longEnough</code> field in the <code>eInput</code> event to <code>maybeValid</code> so I can be lazy about the <code>User</code> machine. In a more comprehensive spec you
+might want to send an event to the user telling them to do manual BIC entry and change from the basic <code>Typing</code> state to a new <code>EnteringBoth</code> state.
+In this case I'm just going to have the component change over to a <code>WaitingManualBic</code> state and have <code>maybeValid</code> represent receiving a valid IBAN and BIC in that state.
+It's not quite as descriptive but it keeps the post focused on evolving the component spec. Let's make those updates now.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Validating {
+</span><span>  // ... existing eValidationResult handler was here
+</span><span>  on eValidationError do {
+</span><span>    goto WaitingManualBic;
+</span><span>  }
+</span><span>}
+</span><span>
+</span><span>state WaitingManualBic {
+</span><span>  on eInput do (input: InputMessage) {
+</span><span>    if (input.maybeValid) {
+</span><span>      goto LocalValidationSuccess;
+</span><span>    }
+</span><span>  }
+</span><span>}
+</span><span>state LocalValidationSuccess {
+</span><span>  ignore eInput;
+</span><span>}
+</span></code></pre>
+<p>The validating state now picks up the <code>eValidationError</code> and transitions to the state to handle manual BIC entry.
+If we get an input that is validated locally, transition to a new termination state showing that we have validated the input locally.</p>
+<p>Let's try dealing with the error where we received input during the validation process.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Validating {
+</span><span>  // ... existing eValidationResult and eValidationError handler was here
+</span><span>  on eInput do {
+</span><span>   goto Waiting;
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>Simple enough, right? Just go back to listening for input if the user starts typing again. This error gets a little more complicated since we've got our first race condition:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&lt;SendLog&gt; &#39;PImplementation.User(2)&#39; in state &#39;Typing&#39; sent event &#39;eInput with payload (&lt;id:0, maybeValid:False, &gt;)&#39; to &#39;Component(3)&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Component(3)&#39; dequeued event &#39;eInput with payload (&lt;id:0, maybeValid:False, &gt;)&#39; in state &#39;Waiting&#39;.
+</span><span>&lt;StateLog&gt; Server(4) enters state &#39;Serving&#39;.
+</span><span>&lt;SendLog&gt; &#39;PImplementation.User(2)&#39; in state &#39;Typing&#39; sent event &#39;eInput with payload (&lt;id:1, maybeValid:True, &gt;)&#39; to &#39;Component(3)&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Component(3)&#39; dequeued event &#39;eInput with payload (&lt;id:1, maybeValid:True, &gt;)&#39; in state &#39;Waiting&#39;.
+</span><span>&lt;SendLog&gt; &#39;Component(3)&#39; in state &#39;Waiting&#39; sent event &#39;eValidationRequest with payload (&lt;comp:Component(3), id:1, &gt;)&#39; to &#39;Server(4)&#39;.
+</span><span>&lt;GotoLog&gt; Component(3) is transitioning from state &#39;Waiting&#39; to state &#39;Validating&#39;.
+</span><span>&lt;StateLog&gt; Component(3) exits state &#39;Waiting&#39;.
+</span><span>&lt;StateLog&gt; Component(3) enters state &#39;Validating&#39;.
+</span><span>&lt;SendLog&gt; &#39;PImplementation.User(2)&#39; in state &#39;Typing&#39; sent event &#39;eInput with payload (&lt;id:3, maybeValid:True, &gt;)&#39; to &#39;Component(3)&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Component(3)&#39; dequeued event &#39;eInput with payload (&lt;id:2, maybeValid:True, &gt;)&#39; in state &#39;Validating&#39;.
+</span><span>&lt;GotoLog&gt; Component(3) is transitioning from state &#39;Validating&#39; to state &#39;Waiting&#39;.
+</span><span>&lt;StateLog&gt; Component(3) exits state &#39;Validating&#39;.
+</span><span>&lt;StateLog&gt; Component(3) enters state &#39;Waiting&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Component(3)&#39; dequeued event &#39;eInput with payload (&lt;id:3, maybeValid:True, &gt;)&#39; in state &#39;Waiting&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Server(4)&#39; dequeued event &#39;eValidationRequest with payload (&lt;comp:Component(3), id:1, &gt;)&#39; in state &#39;Serving&#39;.
+</span><span>&lt;SendLog&gt; &#39;Server(4)&#39; in state &#39;Serving&#39; sent event &#39;eValidationError&#39; to &#39;Component(3)&#39;.
+</span><span>&lt;SendLog&gt; &#39;Component(3)&#39; in state &#39;Waiting&#39; sent event &#39;eValidationRequest with payload (&lt;comp:Component(3), id:3, &gt;)&#39; to &#39;Server(4)&#39;.
+</span><span>&lt;GotoLog&gt; Component(3) is transitioning from state &#39;Waiting&#39; to state &#39;Validating&#39;.
+</span><span>&lt;StateLog&gt; Component(3) exits state &#39;Waiting&#39;.
+</span><span>&lt;StateLog&gt; Component(3) enters state &#39;Validating&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Component(3)&#39; dequeued event &#39;eValidationError&#39; in state &#39;Validating&#39;.
+</span><span>&lt;GotoLog&gt; Component(3) is transitioning from state &#39;Validating&#39; to state &#39;WaitingManualBic&#39;.
+</span><span>&lt;StateLog&gt; Component(3) exits state &#39;Validating&#39;.
+</span><span>&lt;StateLog&gt; Component(3) enters state &#39;WaitingManualBic&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Server(4)&#39; dequeued event &#39;eValidationRequest with payload (&lt;comp:Component(3), id:3, &gt;)&#39; in state &#39;Serving&#39;.
+</span><span>&lt;SendLog&gt; &#39;PImplementation.User(2)&#39; in state &#39;Typing&#39; sent event &#39;eInput with payload (&lt;id:4, maybeValid:True, &gt;)&#39; to &#39;Component(3)&#39;.
+</span><span>&lt;SendLog&gt; &#39;Server(4)&#39; in state &#39;Serving&#39; sent event &#39;eValidationError&#39; to &#39;Component(3)&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Component(3)&#39; dequeued event &#39;eInput with payload (&lt;id:4, maybeValid:True, &gt;)&#39; in state &#39;WaitingManualBic&#39;.
+</span><span>&lt;GotoLog&gt; Component(3) is transitioning from state &#39;WaitingManualBic&#39; to state &#39;LocalValidationSuccess&#39;.
+</span><span>&lt;StateLog&gt; Component(3) exits state &#39;WaitingManualBic&#39;.
+</span><span>&lt;StateLog&gt; Component(3) enters state &#39;LocalValidationSuccess&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Component(3)&#39; dequeued event &#39;eValidationError&#39; in state &#39;LocalValidationSuccess&#39;.
+</span><span>&lt;StateLog&gt; Component(3) exits state &#39;LocalValidationSuccess&#39;.
+</span><span>&lt;PopLog&gt; &#39;Component(3)&#39; popped with unhandled event &#39;eValidationError&#39; and reentered state &#39;LocalValidationSuccess.
+</span><span>&lt;ExceptionLog&gt; Component(3) running action &#39;&#39; in state &#39;LocalValidationSuccess&#39; threw exception &#39;UnhandledEventException&#39;.
+</span><span>&lt;ErrorLog&gt; Component(3) received event &#39;PImplementation.eValidationError&#39; that cannot be handled.
+</span></code></pre>
+<p>Here's a summary of the error:</p>
+<ol>
+<li>User sends a maybe valid response</li>
+<li>Component requests validation from the server and transitions to validating</li>
+<li>User types some more, we go back to waiting.</li>
+<li>User sends some potentially valid input, component requests validation and goes back to validating</li>
+<li>Component get the <em>first</em> response for the validation request from the server and transition to manual BIC entry.</li>
+<li>User sends valid input, component goes to the local validation success state.</li>
+<li>Component receives the <em>second</em> response from the server and doesn't know what to do with it.</li>
+</ol>
+<p>This is basically what happens when you have <code>fetch</code> in a <code>useEffect</code> and you don't abort the requests when they're
+obsolete. You could get out of order responses, or receive your response after the component has unmounted yielding the classic
+error about setting state on an unmounted component. Let's solve this the wrong way first and introduce spec machines. The easiest way
+to not have an unhandled message is to ignore the message!</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Valid {
+</span><span>  ignore eInput, eValidationError, eValidationResult;
+</span><span>}
+</span></code></pre>
+<p>Invalid, LocalValidationSuccess, WaitingManualBic are handled similarly. Let's run the test again. We should see something like this:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>... Testing statistics:
+</span><span>..... Found 0 bugs.
+</span></code></pre>
+<h3 id="testing-liveness">Testing Liveness</h3>
+<p>We know this isn't right though. Let's add a spec machine that asserts whatever response we show the user corresponds to their most recent input. In TestScript.p:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>spec Liveness observes  eInput, eDone {
+</span><span>    var lastRequest: int;
+</span><span>    start cold state Init {
+</span><span>        on eInput do (input: InputMessage) {
+</span><span>            HandleInput(input);
+</span><span>            goto AwaitingValidation;
+</span><span>        }
+</span><span>    }
+</span><span>
+</span><span>    hot state AwaitingValidation {
+</span><span>        on eInput do HandleInput;
+</span><span>        on eDone do (id: int) {
+</span><span>            if (id == lastRequest) {
+</span><span>                goto Init;
+</span><span>            }
+</span><span>        }
+</span><span>    }
+</span><span>
+</span><span>    fun HandleInput(input: InputMessage) {
+</span><span>        lastRequest = input.id;
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>A spec machine states what events it observes. Here we transition to a <code>hot</code> state when an input event is sent while we're in the <code>Init</code> state.
+If we stay in a hot state too long, we get a liveness bug. If our most recent request gets validated (<code>eDone</code> sent with our latest ID) then we go back to the cold state.
+There's another new concept in this block of code. You can define functions and pass them directly as handlers for events.
+Update our <code>test</code> as well:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>test ReactComponent [main=User]: assert Liveness in {User,Component,Server};
+</span></code></pre>
+<p>Finally we'll need to update <code>Component</code> to <code>announce</code> when it has finished validating a request.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Validating {
+</span><span>  on eValidationResult do (result: ValidationResult) {
+</span><span>    announce eDone, result.id;
+</span><span>    ...
+</span><span>  }
+</span><span>  on eValidationError do (id: int) {
+</span><span>    announce eDone, id; 
+</span><span>    goto WaitingManualBic;
+</span><span>  }
+</span><span>}
+</span><span>
+</span><span>...
+</span><span>
+</span><span>state WaitingManualBic {
+</span><span>  on eInput do (input: InputMessage) {
+</span><span>    if (input.maybeValid) {
+</span><span>      announce eDone, input.id;
+</span><span>      ...
+</span><span>    }
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>If we run the tests now, we can see that we're still doing the wrong thing:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&lt;MonitorLog&gt; PImplementation.Liveness is processing event &#39;PImplementation.eInput&#39; in state &#39;AwaitingValidation&#39;.
+</span><span>&lt;ErrorLog&gt; PImplementation.Liveness detected potential liveness bug in hot state &#39;AwaitingValidation&#39;.
+</span></code></pre>
+<p>The monitor is stuck in <code>AwaitingValidation</code> because the latest request from the user never gets validated. Our termination states
+are also now clearly problematic. Our component will ignore any further input from the user if it's reached a decision about what they typed.
+It's clearly not helpful to only give them one shot at typing something in. Time for the final round of updates. There's a few things we'll be doing:</p>
+<ol>
+<li>When we complete local or server validation, announce to the monitor that we finished looking at that input.</li>
+<li>Only deal with the server's message if it's for our latest request.</li>
+<li>The Valid, Invalid, and LocalValidationSuccess states need to respond to input and start the validation cycle over again.</li>
+</ol>
+<p>First off, let's define a couple functions to make this easier:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>fun ServerValidate(input: InputMessage) {
+</span><span>  currentInput = input;
+</span><span>  send server, eValidationRequest, (comp = this, id = input.id);
+</span><span>}
+</span><span>
+</span><span>fun HandleInput(input: InputMessage) {
+</span><span>  if (input.maybeValid) {
+</span><span>    ServerValidate(input);
+</span><span>    goto Validating;
+</span><span>  } else {
+</span><span>    currentInput = input;
+</span><span>    goto Waiting;
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>HandleInput kicks off server validation if necessary or drops us back into the waiting state. Both branches update our local request ID with the latest from the user.
+This would be aborting your <code>AbortController</code> for <code>fetch</code> or otherwise canceling a pending async task in the React implementation. Valid and Invalid are trivial now:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Valid {
+</span><span>  on eInput do HandleInput;
+</span><span>}
+</span><span>state Invalid {
+</span><span>  on eInput do HandleInput;
+</span><span>}
+</span></code></pre>
+<p>After a server error we enter local validation. Since it happens locally we don't have to worry about race conditions. <code>WaitingManualBic</code> just needs to announce when it's valid. <code>LocalValidationSuccess</code>
+needs to go back to the waiting state if it receives invalid input.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state LocalValidationSuccess {
+</span><span>  on eInput do (input: InputMessage) {
+</span><span>    if (input.maybeValid) {
+</span><span>        announce eDone, input.id;
+</span><span>    } else {
+</span><span>      goto WaitingManualBic;
+</span><span>    }
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>At this point, the code in GitHub for the spec matches this state. It might be clearer if you look at the <code>iban.p</code> file to see the final state if you're wondering about any of the individual pieces.
+Running the tests shows our spec passing:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>Starting TestingProcessScheduler in process 7592
+</span><span>... Created &#39;1&#39; testing task.
+</span><span>... Task 0 is using &#39;random&#39; strategy (seed:654229532).
+</span><span>..... Iteration #1
+</span><span>... Testing statistics:
+</span><span>..... Found 0 bugs.
+</span><span>... Scheduling statistics:
+</span><span>..... Explored 1 schedule: 1 fair and 0 unfair.
+</span><span>..... Number of scheduling points in fair terminating schedules: 100000 (min), 100000 (avg), 100000 (max).
+</span><span>..... Exceeded the max-steps bound of &#39;10000&#39; in 100.00% of the fair schedules.
+</span><span>... Elapsed 2.1274284 sec.
+</span></code></pre>
+<p>At this point we're handling Liveness in that if the user types something they'll eventually get a response from the component. We're also handling correctness in that we're asserting the response they get is for their most recent input.</p>
+<h3 id="what-about-the-other-server-failure-case">What about the other server failure case?</h3>
+<p>The Server implementation is only sending Valid, Invalid, and Error. I haven't written a condition for not sending any response at all or for out of order responses.
+To do that we could store a set of requests in the Server as they come in and use the <code>on null</code> pattern to choose a request and either respond to it or drop it entirely.</p>
+<p>To handle that, we would need a new <code>Timer</code> machine. When <code>Component</code> sends a request to the server it starts the timer. The timer would then send an <code>eTimeout</code> message back to
+the component and turn itself off. The official docs have an example for this. On the component side, we'd consider the timeout to be an error and abandon that request.</p>
+<h2 id="wrapping-up">Wrapping Up</h2>
+<p>That covers a lot of the features of P! I've always found formal verification to be a bit intimidating but I was able to learn P while writing this post and I'm happy with how it went.
+There's definitely some room for improvement in the spec but I'm even more convinced now that at a minimum this can be a useful thinking aid while working over a problem. Here are some additional resources:</p>
+<ul>
+<li><a href="https://github.com/mlh758/blog_p_spec">The code on GitHub</a></li>
+<li><a href="https://p-org.github.io/P/">The official docs</a></li>
+<li><a href="https://www.microsoft.com/en-us/research/blog/p-programming-language-asynchrony/">Microsoft's P announcement</a></li>
+<li><a href="https://www.mydistributed.systems/2021/06/p-language.html">Blog summarizing P that I found helpful for referencing keywords</a></li>
+</ul>
+
+    </div>
+</article>
+
+        </main>
+        
+        <footer>
+            
+            <div class="border"></div>
+            <div class="footer">
+                <small class="footer-left">
+                    Copyright &copy; Michael
+                </small>
+                <small class="footer-right">
+                    Powered by <a href="https://www.getzola.org">Zola</a> | Theme <a href="https://github.com/barlog-m/oceanic-zen">Oceanic Zen</a>
+                </small>
+            </div>
+        
+        </footer>
+    
+        </div>
+    </body>
+</html>
