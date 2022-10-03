@@ -7,24 +7,27 @@ P is a [programming language](https://www.microsoft.com/en-us/research/blog/p-pr
 It's similar to TLA+ in that you are working at a much higher level of abstraction than the final program. P provides a formal specification of the program
 or protocol that is helpful both as a thinking aid and a mechanism for checking correctness.
 This helps you find bugs _very_ early, when you're still thinking about how you are going to design something.
-It can also serve as a description of what the code you are modeling is _supposed to be doing_ when you or someone else come back to it later. P diverges from TLA+ in two important ways:
+It can also serve as a description of what the code you are modeling is _supposed to be doing_ when you or someone else comes back to it later. P diverges from TLA+ in two important ways:
 
 1. TLA+ is more about proving correctness and will search the entire possible state space if you let it. P will search a limited
 subspace of possible states.
-2. I can actually understand what's going on a P program.
+2. I can actually understand what's going on in a P program.
 
 No offense to Leslie Lamport on this one, but TLA+'s way of describing a system is less approachable to me since I don't
 usually think about the code I'm writing in mathematical terms. I don't think I'm alone in finding the syntax and tools to be abstruse. TLA+ added PlusCal to give a different syntax
 that might be more approachable but having to essentially write it as a giant code comment in a TLA file makes it feel very second-class. I also picked up _Practical TLA+: Planning Driven Development_
 as an alternative source for learning TLA+ and found that the book had to include a substantial module of their own to make working with the built-in data types easier. I'm on board with
-wanting a way to describe my programs that can help me find design bugs but TLA+ has been an uphill battle. That said, I highly recommend you check out the [video series](https://www.youtube.com/channel/UCajiu4Cj_GHOX0if3Up-eRA)
+wanting a way to describe my programs that can help me find design bugs but TLA+ has been an uphill battle. I still highly recommend you check out the [video series](https://www.youtube.com/channel/UCajiu4Cj_GHOX0if3Up-eRA)
 on TLA+ at some point, it might spark some interest for you. It's been hugely influential in proving the correctness of distributed protocols like Paxos.
 
 P takes a more familiar approach to modeling that is based around state machines communicating with events. You declare a set of machines, their states, the events in the system, and start filling in the
-state machine definitions. Events are asynchronous and the mailboxes of machines are unbounded. You can declare new instances of machines at runtime, and the model checker will explore many combinations of
-states and events that you describe as valid looking for issues. You provide test machines that assert correctness and liveness properties that the checker uses to check the validity of your spec.
+state machine definitions. Events are asynchronous and the mailboxes of machines are unbounded. You can declare new instances of machines at runtime. The model checker will explore many combinations of
+states and events that you describe as valid while looking for issues. You provide test machines that assert correctness and liveness properties that the checker uses to check the validity of your spec as it runs.
 
-When I'm thinking about my programs at a high level, this is a model I already tend to use. If any of this sounds a bit like Erlang/Elixir to you, we'd probably be friends.
+When I'm thinking about my programs at a high level, actors passing messages is a natural abstraction for me.
+In many ways that's object oriented code described in the simplest terms, hence Smalltalk. If any of this sounds a bit like Erlang/Elixir to you, we'd probably be friends.
+
+You can find all the spec code for this post [here](https://github.com/mlh758/blog_p_spec) if you want to follow along with the final version.
 
 ## Boring, workaday uses
 
@@ -62,11 +65,12 @@ In the official docs you can find a more complex test set definition [here](http
 test machines are defined that provide different scenarios to run through. This also shows the module/substitution system in action.
 
 Machines communicate by passing events asynchronously. There are mechanisms for non-determinism which provide branching points in the state space to be searched. These arbitrary decision points are like a user
-rampaging through all the weird edge cases in your application as fast as they can and are really helpful for uncovering subtle concurrency issues.
+rampaging through all the weird edge cases in your application as fast as they can and are really helpful for uncovering subtle concurrency issues. Where a unit or integration test defines a specific scenario
+and makes assertions about it, a model defines the scope of possible actions. The spec then defines properties that must hold while the system executes. Tests in this way are much more exploratory.
 
 Correctness can be enforced _within_ your state machines with the `assert` keyword.
 You can also provide monitor machines defined as `spec SomeMachineName observes e1, e2, e3... {}`. These are also just state machines but they can see events other machines are sending and assert errors too.
-These monitor machines assert liveness by entering a state annoted with `hot`. If a monitor stays in a hot state for too long, the test will fail with a liveness error. Hot states ensure your program is making
+These monitor machines assert liveness by entering a state annotated with `hot`. If a monitor stays in a hot state for too long, the test will fail with a liveness error. Hot states ensure your program is making
 progress rather than just passing by ignoring all the events.
 
 ### The most basic example
@@ -129,7 +133,7 @@ machine Server {
           send req.comp, eValidationResult, (id = req.id, valid = false);
         }
       } else {
-        send req.comp, eValidationError;
+        send req.comp, eValidationError, req.id;
       }
     }
   }
@@ -194,7 +198,7 @@ We get:
 <ErrorLog> Component(3) received event 'PImplementation.eInput' that cannot be handled.
 ```
 
-So we were in the `Validating` state and the user started typing again. Yup, we should probably account for that. Let's try running it again and see what we get.
+So we were in the `Validating` state and the user began typing again. Yup, we should probably account for that. Let's try running it again and see what we get.
 
 ```
 ...
@@ -237,3 +241,247 @@ state LocalValidationSuccess {
 
 The validating state now picks up the `eValidationError` and transitions to the state to handle manual BIC entry.
 If we get an input that is validated locally, transition to a new termination state showing that we have validated the input locally.
+
+Let's try dealing with the error where we received input during the validation process.
+
+```
+state Validating {
+  // ... existing eValidationResult and eValidationError handler was here
+  on eInput do {
+   goto Waiting;
+  }
+}
+```
+
+Simple enough, right? Just go back to listening for input if the user starts typing again. This error gets a little more complicated since we've got our first race condition:
+
+```
+<SendLog> 'PImplementation.User(2)' in state 'Typing' sent event 'eInput with payload (<id:0, maybeValid:False, >)' to 'Component(3)'.
+<DequeueLog> 'Component(3)' dequeued event 'eInput with payload (<id:0, maybeValid:False, >)' in state 'Waiting'.
+<StateLog> Server(4) enters state 'Serving'.
+<SendLog> 'PImplementation.User(2)' in state 'Typing' sent event 'eInput with payload (<id:1, maybeValid:True, >)' to 'Component(3)'.
+<DequeueLog> 'Component(3)' dequeued event 'eInput with payload (<id:1, maybeValid:True, >)' in state 'Waiting'.
+<SendLog> 'Component(3)' in state 'Waiting' sent event 'eValidationRequest with payload (<comp:Component(3), id:1, >)' to 'Server(4)'.
+<GotoLog> Component(3) is transitioning from state 'Waiting' to state 'Validating'.
+<StateLog> Component(3) exits state 'Waiting'.
+<StateLog> Component(3) enters state 'Validating'.
+<SendLog> 'PImplementation.User(2)' in state 'Typing' sent event 'eInput with payload (<id:3, maybeValid:True, >)' to 'Component(3)'.
+<DequeueLog> 'Component(3)' dequeued event 'eInput with payload (<id:2, maybeValid:True, >)' in state 'Validating'.
+<GotoLog> Component(3) is transitioning from state 'Validating' to state 'Waiting'.
+<StateLog> Component(3) exits state 'Validating'.
+<StateLog> Component(3) enters state 'Waiting'.
+<DequeueLog> 'Component(3)' dequeued event 'eInput with payload (<id:3, maybeValid:True, >)' in state 'Waiting'.
+<DequeueLog> 'Server(4)' dequeued event 'eValidationRequest with payload (<comp:Component(3), id:1, >)' in state 'Serving'.
+<SendLog> 'Server(4)' in state 'Serving' sent event 'eValidationError' to 'Component(3)'.
+<SendLog> 'Component(3)' in state 'Waiting' sent event 'eValidationRequest with payload (<comp:Component(3), id:3, >)' to 'Server(4)'.
+<GotoLog> Component(3) is transitioning from state 'Waiting' to state 'Validating'.
+<StateLog> Component(3) exits state 'Waiting'.
+<StateLog> Component(3) enters state 'Validating'.
+<DequeueLog> 'Component(3)' dequeued event 'eValidationError' in state 'Validating'.
+<GotoLog> Component(3) is transitioning from state 'Validating' to state 'WaitingManualBic'.
+<StateLog> Component(3) exits state 'Validating'.
+<StateLog> Component(3) enters state 'WaitingManualBic'.
+<DequeueLog> 'Server(4)' dequeued event 'eValidationRequest with payload (<comp:Component(3), id:3, >)' in state 'Serving'.
+<SendLog> 'PImplementation.User(2)' in state 'Typing' sent event 'eInput with payload (<id:4, maybeValid:True, >)' to 'Component(3)'.
+<SendLog> 'Server(4)' in state 'Serving' sent event 'eValidationError' to 'Component(3)'.
+<DequeueLog> 'Component(3)' dequeued event 'eInput with payload (<id:4, maybeValid:True, >)' in state 'WaitingManualBic'.
+<GotoLog> Component(3) is transitioning from state 'WaitingManualBic' to state 'LocalValidationSuccess'.
+<StateLog> Component(3) exits state 'WaitingManualBic'.
+<StateLog> Component(3) enters state 'LocalValidationSuccess'.
+<DequeueLog> 'Component(3)' dequeued event 'eValidationError' in state 'LocalValidationSuccess'.
+<StateLog> Component(3) exits state 'LocalValidationSuccess'.
+<PopLog> 'Component(3)' popped with unhandled event 'eValidationError' and reentered state 'LocalValidationSuccess.
+<ExceptionLog> Component(3) running action '' in state 'LocalValidationSuccess' threw exception 'UnhandledEventException'.
+<ErrorLog> Component(3) received event 'PImplementation.eValidationError' that cannot be handled.
+```
+
+Here's a summary of the error:
+
+1. User sends a maybe valid response
+2. Component requests validation from the server and transitions to validating
+3. User types some more, we go back to waiting.
+4. User sends some potentially valid input, component requests validation and goes back to validating
+5. Component get the _first_ response for the validation request from the server and transition to manual BIC entry.
+6. User sends valid input, component goes to the local validation success state.
+7. Component receives the _second_ response from the server and doesn't know what to do with it.
+
+This is basically what happens when you have `fetch` in a `useEffect` and you don't abort the requests when they're
+obsolete. You could get out of order responses, or receive your response after the component has unmounted yielding the classic
+error about setting state on an unmounted component. Let's solve this the wrong way first and introduce spec machines. The easiest way
+to not have an unhandled message is to ignore the message!
+
+
+```
+state Valid {
+  ignore eInput, eValidationError, eValidationResult;
+}
+```
+
+Invalid, LocalValidationSuccess, WaitingManualBic are handled similarly. Let's run the test again. We should see something like this:
+
+```
+... Testing statistics:
+..... Found 0 bugs.
+```
+
+### Testing Liveness
+
+We know this isn't right though. Let's add a spec machine that asserts whatever response we show the user corresponds to their most recent input. In TestScript.p:
+
+```
+spec Liveness observes  eInput, eDone {
+    var lastRequest: int;
+    start cold state Init {
+        on eInput do (input: InputMessage) {
+            HandleInput(input);
+            goto AwaitingValidation;
+        }
+    }
+
+    hot state AwaitingValidation {
+        on eInput do HandleInput;
+        on eDone do (id: int) {
+            if (id == lastRequest) {
+                goto Init;
+            }
+        }
+    }
+
+    fun HandleInput(input: InputMessage) {
+        lastRequest = input.id;
+    }
+}
+```
+
+A spec machine states what events it observes. Here we transition to a `hot` state when an input event is sent while we're in the `Init` state.
+If we stay in a hot state too long, we get a liveness bug. If our most recent request gets validated (`eDone` sent with our latest ID) then we go back to the cold state.
+There's another new concept in this block of code. You can define functions and pass them directly as handlers for events.
+Update our `test` as well:
+
+```
+test ReactComponent [main=User]: assert Liveness in {User,Component,Server};
+```
+
+Finally we'll need to update `Component` to `announce` when it has finished validating a request.
+
+```
+state Validating {
+  on eValidationResult do (result: ValidationResult) {
+    announce eDone, result.id;
+    ...
+  }
+  on eValidationError do (id: int) {
+    announce eDone, id; 
+    goto WaitingManualBic;
+  }
+}
+
+...
+
+state WaitingManualBic {
+  on eInput do (input: InputMessage) {
+    if (input.maybeValid) {
+      announce eDone, input.id;
+      ...
+    }
+  }
+}
+```
+
+If we run the tests now, we can see that we're still doing the wrong thing:
+
+```
+<MonitorLog> PImplementation.Liveness is processing event 'PImplementation.eInput' in state 'AwaitingValidation'.
+<ErrorLog> PImplementation.Liveness detected potential liveness bug in hot state 'AwaitingValidation'.
+```
+
+The monitor is stuck in `AwaitingValidation` because the latest request from the user never gets validated. Our termination states
+are also now clearly problematic. Our component will ignore any further input from the user if it's reached a decision about what they typed.
+It's clearly not helpful to only give them one shot at typing something in. Time for the final round of updates. There's a few things we'll be doing:
+
+1. When we complete local or server validation, announce to the monitor that we finished looking at that input.
+2. Only deal with the server's message if it's for our latest request.
+3. The Valid, Invalid, and LocalValidationSuccess states need to respond to input and start the validation cycle over again.
+
+First off, let's define a couple functions to make this easier:
+
+```
+fun ServerValidate(input: InputMessage) {
+  currentInput = input;
+  send server, eValidationRequest, (comp = this, id = input.id);
+}
+
+fun HandleInput(input: InputMessage) {
+  if (input.maybeValid) {
+    ServerValidate(input);
+    goto Validating;
+  } else {
+    currentInput = input;
+    goto Waiting;
+  }
+}
+```
+
+HandleInput kicks off server validation if necessary or drops us back into the waiting state. Both branches update our local request ID with the latest from the user.
+This would be aborting your `AbortController` for `fetch` or otherwise canceling a pending async task in the React implementation. Valid and Invalid are trivial now:
+
+```
+state Valid {
+  on eInput do HandleInput;
+}
+state Invalid {
+  on eInput do HandleInput;
+}
+```
+
+After a server error we enter local validation. Since it happens locally we don't have to worry about race conditions. `WaitingManualBic` just needs to announce when it's valid. `LocalValidationSuccess`
+needs to go back to the waiting state if it receives invalid input.
+
+```
+state LocalValidationSuccess {
+  on eInput do (input: InputMessage) {
+    if (input.maybeValid) {
+        announce eDone, input.id;
+    } else {
+      goto WaitingManualBic;
+    }
+  }
+}
+```
+
+At this point, the code in GitHub for the spec matches this state. It might be clearer if you look at the `iban.p` file to see the final state if you're wondering about any of the individual pieces.
+Running the tests shows our spec passing:
+
+```
+Starting TestingProcessScheduler in process 7592
+... Created '1' testing task.
+... Task 0 is using 'random' strategy (seed:654229532).
+..... Iteration #1
+... Testing statistics:
+..... Found 0 bugs.
+... Scheduling statistics:
+..... Explored 1 schedule: 1 fair and 0 unfair.
+..... Number of scheduling points in fair terminating schedules: 100000 (min), 100000 (avg), 100000 (max).
+..... Exceeded the max-steps bound of '10000' in 100.00% of the fair schedules.
+... Elapsed 2.1274284 sec.
+```
+
+At this point we're handling Liveness in that if the user types something they'll eventually get a response from the component. We're also handling correctness in that we're asserting the response they get is for their most recent input.
+
+### What about the other server failure case?
+
+The Server implementation is only sending Valid, Invalid, and Error. I haven't written a condition for not sending any response at all or for out of order responses.
+To do that we could store a set of requests in the Server as they come in and use the `on null` pattern to choose a request and either respond to it or drop it entirely.
+
+To handle that, we would need a new `Timer` machine. When `Component` sends a request to the server it starts the timer. The timer would then send an `eTimeout` message back to
+the component and turn itself off. The official docs have an example for this. On the component side, we'd consider the timeout to be an error and abandon that request.
+
+## Wrapping Up
+
+That covers a lot of the features of P! I've always found formal verification to be a bit intimidating but I was able to learn P while writing this post and I'm happy with how it went.
+There's definitely some room for improvement in the spec but I'm even more convinced now that at a minimum this can be a useful thinking aid while working over a problem. Here are some additional resources:
+
+* [The code on GitHub](https://github.com/mlh758/blog_p_spec)
+* [The official docs](https://p-org.github.io/P/)
+* [Microsoft's P announcement](https://www.microsoft.com/en-us/research/blog/p-programming-language-asynchrony/)
+* [Blog summarizing P that I found helpful for referencing keywords](https://www.mydistributed.systems/2021/06/p-language.html)
