@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        
+
+        <title></title>
+
+        
+            <link rel="stylesheet" href="https://webshittery.com/theme.css">
+        
+        
+    </head>
+    <body>
+        <div class="content">
+        
+        
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;webshittery.com" class="logo"></a>
+                </div>
+                <div class="header-right">
+                    <nav itemscope itemtype="http://schema.org/SiteNavigationElement">
+                      <ul>
+                        
+                        
+                            
+                            <li class="nav">
+                                <a itemprop="url" href="https://webshittery.com/blog/">
+                                    <span itemprop="name">Blog</span>
+                                </a>
+                            </li>
+                        
+                        
+                        <li class="nav">
+                            <a itemprop="url" href="https://github.com/mlh758">
+                                <img class="icon" src="https:&#x2F;&#x2F;webshittery.com/icons/github.svg" alt="Github">
+                            </a>
+                        </li>
+                        
+                        
+                      </ul>
+                    </nav>
+                </div>
+            </header>
+        
+        
+        <main>
+            
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div itemprop="headline">
+        <h1>Let&#x27;s Talk About Dual Writes</h1>
+        <div class="border"></div>
+        <time datetime="2023-05-27" class="date" itemprop="datePublished">
+            27 May 2023
+        </time>
+    </div>
+    <div itemprop="articleBody">
+        <p>Most web applications need to store data <em>somewhere</em> to handle persistent
+state between requests. Usually this is an OLTP (online transaction processing) database.
+This might be a relational database like PostgreSQL but could just as easily be a
+document oriented database like Mongo. Depending on your use case this initial storage may
+take you pretty far. Databases these days often offer some degree of full text search,
+indexes for optimizing geospacial queries, and pub/sub mechanisms. 
+At some point though, it is likely you'll end up with additional data stores.</p>
+<p>Additional data stores can be obvious such as an OLAP (online analytical processing)
+database, Elasticsearch, or caches. They may also be somewhat less obviously databases such as
+<a href="https://github.com/sidekiq/sidekiq">Sidekiq</a> (which is a job queue for Ruby that uses Redis)
+or a remote queue system like RabbitMQ or Kafka. I mention this
+other category separately because I've noticed that on many teams there is a lot more
+care taken to ensure writes to something like Elasticsearch are working than with a
+job back end like Sidekiq which &quot;just works&quot;.</p>
+<p>This post is going to use the P modeling language to describe a common, but flawed approach
+to managing multiple storage systems as well as a couple of the available alternatives.
+You can find the P source for this on <a href="https://github.com/mlh758/blog_dual_write_spec">GitHub</a>.</p>
+<p>If you want more details I recommend all of the following:</p>
+<ul>
+<li>Enjoy the many <a href="https://aphyr.com/tags/jepsen">Jepsen audits</a> showing all the exciting ways
+systems can fail.</li>
+<li><a href="https://www.confluent.io/blog/using-logs-to-build-a-solid-data-infrastructure-or-why-dual-writes-are-a-bad-idea/">This blog post</a> from the author of <em>Designing Data Intensive Applications</em> about using logs to replicate changes.</li>
+<li>Just read <em>Designing Data Intensive Applications</em>.</li>
+<li><a href="https://www.youtube.com/watch?v=MYD4rrIqDhA">This video on event sourcing</a>. I like it because it's a good summary of what event sourcing is, what problems it can solve for you, and what tools offer similar solutions for simpler scenarios.</li>
+</ul>
+<h2 id="choosing-dual-writes">Choosing Dual Writes</h2>
+<p>Once you have onr or more secondary data stores you have to decide how to keep it in sync with
+the primary database. The obvious choice, and one I see chosen frequently, is to write
+a value to the primary storage and then write a value to the secondary storage.
+If you have several additional storage mechanisms you might write to the primary and then
+enqueue a job (itself a write to a remote system) to make the updates to the additional systems.
+I've also seen what at first glance appears to be a more sophisticated approach where a write
+is done against the primary database then then an event enqueued to notify additional systems
+to make their updates. In reality however, this is equivalent to the job mechanism I described
+earlier as both rely on a write to a secondary system to succeed.</p>
+<p>In Rails this kind of thing is <em>very</em> common even among large community gems. Sidekiq is a
+common job runner that uses Redis to store a job queue. <code>ActiveRecord</code> provides lifecycle
+callbacks on your data models so that tasks can be run <code>after_commit</code>. Gems like <a href="https://github.com/sunspot/sunspot">sunspot</a>
+use that to trigger updates to a search index after a model is updated and the transaction
+commits.</p>
+<p>The most insidious thing about this approach is that most of the time <em>it works</em>.</p>
+<h2 id="the-problem-with-dual-writes">The Problem With Dual Writes</h2>
+<p>When things go wrong with this mechanism it's usually rare, sometimes subtle, and usually difficult to
+reproduce outside of production where infrastructure is more complicated and traffic volumes are
+higher.</p>
+<p>Let's assume you have two servers, A and B. Your primary database is PostgreSQL and you
+synchronize some updates to a search index. You do this by enqueuing an async job after an
+update to the primary database commits.</p>
+<p>Here's a couple of things that could go wrong:</p>
+<ol>
+<li>You write the record to the primary and your job queue is unavailable. Redis might be
+out of memory, the network is down, who knows. The search index never gets that update.</li>
+<li>An update comes to server A to set X = 2 and shortly after an update comes to server B to
+set X = 3. These database transactions run and in the primary X = 3. However after the commit
+server A pauses for garbage collection. Server B enqueues the task to update X = 3 in the
+index and <em>then</em> server A enqueues the task to update X = 2. Now the primary says X = 3
+and the search index says X = 2.</li>
+</ol>
+<p>You could mitigate some ordering problems with <a href="https://en.wikipedia.org/wiki/Lamport_timestamp">Lamport Timestamps</a> created in the primary database but only if the updates cause no side effects in the secondary systems. It may also not be clear where your transaction boundaries
+are in sufficiently messy code. You may end up eunqueueing jobs in the middle of a large
+transaction that gets rolled back. Now you have emitted events for an operation that
+never occurred. Even if you get the transaction boundaries right, the potential for
+data loss just gets bigger if that job with the accumulated events then falls on the floor.</p>
+<h2 id="modeling-the-problem">Modeling the problem</h2>
+<p>We'll start by modeling a single database just to verify the base case of our specification
+and then move through a couple of problem scenarios and solutions.</p>
+<p>A reminder that you can view the full code for this post <a href="https://github.com/mlh758/blog_dual_write_spec">on GitHub</a> to explore it in more detail.
+P has been updated since my last post which simplifies the commands a little. <code>p compile</code> builds
+a project and <code>p check -tc &lt;test case&gt; -i &lt;iteration count&gt;</code> runs the model checker.</p>
+<h3 id="verifying-consistencey">Verifying Consistencey</h3>
+<p>In all our tests we want to verify that eventually it will always be the case that all
+databases recorded the same events in the same order. With P we do that with a liveness property
+using <code>hot</code> and <code>cold</code> states. <code>AllMatch</code> is checking that the events which <em>all</em> databases
+have recorded match. It will consider <code>1, 2, 3</code> and <code>1, 2</code> a match and won't verify the third
+slot until the other database catches up.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>cold state WaitForEvents {
+</span><span>    on eWriteRecorded do (write: tWriteRecorded) {
+</span><span>        UpdateDatabase(write);
+</span><span>        dbs = values(databaseStates);
+</span><span>        if (!SameSize()) {
+</span><span>            goto WaitForSequencesToMatch;
+</span><span>        }
+</span><span>        assert AllMatch(), &quot;Sequences are out of order&quot;;
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>hot state WaitForSequencesToMatch {
+</span><span>    on eWriteRecorded do (write: tWriteRecorded) {
+</span><span>        UpdateDatabase(write);
+</span><span>        dbs = values(databaseStates);
+</span><span>        assert AllMatch(), &quot;Sequences are out of order&quot;;
+</span><span>        if (SameSize()) {
+</span><span>            goto WaitForEvents;
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Databases will announce when they see a value and the spec machine will record that in a
+sequence for each database. We know if the databases have a different number of events they
+can't be consistent so we transition to a hot state. If they have the same number of events
+and yet the events in each slot don't match we've hit a correctness violation.</p>
+<p>If we're in a hot state and the databases become consistent we can fall back to a cold state.</p>
+<h3 id="a-single-database">A Single Database</h3>
+<p>This is just to check that the spec we wrote functions correctly. A single database should always
+be consistent with itself. Here's our first pass at a database:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine Database
+</span><span>{
+</span><span>    // store our name so the spec machine can track our state correctly
+</span><span>    var name: string;
+</span><span>    start state Init {
+</span><span>        entry (payload: string) {
+</span><span>            name = payload;
+</span><span>            goto WaitForRequests;
+</span><span>        }
+</span><span>        defer eWriteReq;
+</span><span>    }
+</span><span>    // announce the commands we recieve
+</span><span>    state WaitForRequests {
+</span><span>        on eWriteReq do (val: int) {
+</span><span>            announce eWriteRecorded, (name, val);
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Below is our first test driver. We declare a database, <code>announce</code> an init event
+to start our spec machine, and then fire a few commands at the database.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine SingleDatabase {
+</span><span>    var database: Database;
+</span><span>    var iter: int;
+</span><span>    var instances: seq[string];
+</span><span>    start state Init {
+</span><span>        entry {
+</span><span>            instances += (0, &quot;Primary&quot;);
+</span><span>            announce eMonitor_ConsistencyInit, instances;
+</span><span>            database = new Database(instances[0]);
+</span><span>            while (iter &lt; 10) {
+</span><span>                iter = iter + 1;
+</span><span>                send database, eWriteReq, iter;
+</span><span>            }
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>After running <code>p compile</code> and <code>p check -tc tcSingleDatabase -i 100</code> we should see:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>..... Found 0 bugs.
+</span></code></pre>
+<p>Hooray.</p>
+<h3 id="dual-writes-single-server-magic-uptime">Dual Writes, Single Server, Magic Uptime</h3>
+<p>First, we introduce the server machine. Servers act as the client to the database
+and send it a sequence of messages. Each server gets initialized with a primary
+database and a potentially empty set of followers. In dual write scenarios it will
+write first to the primary and then to the followers. We initialize each server
+with a non-overlapping sequence of messages just to keep the sequence of integers
+unique. Here is an excerpt of the server machine. I omitted the variable declarations
+and init function since they're boring:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>type tStartServer = (primary: Database, followers: set[Database], startAt: int, messageCount: int);
+</span><span>
+</span><span>machine Server {
+</span><span>    // for each message in our range, send it to the primary
+</span><span>    // and then any followers we&#39;re aware of to simulate dual writes
+</span><span>    var follower: Database;
+</span><span>    state SendMessages {
+</span><span>        entry {
+</span><span>            while (counter &lt; messageCount) {
+</span><span>                send primary, eWriteReq, startAt + counter;
+</span><span>                foreach (follower in followers) {
+</span><span>                    send follower, eWriteReq, startAt + counter;
+</span><span>                }
+</span><span>                counter = counter + 1;
+</span><span>            }
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Our test case for this scenario is similarly straightforward. <code>BuildDatabases</code> just turns
+the sequence of names into the <code>(Database, set[Database])</code> tuple we need for initializing
+servers.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine SingleServerPerfectDualWrites {
+</span><span>    // declarations omitted
+</span><span>    start state Init {
+</span><span>        entry {
+</span><span>            instances += (0, &quot;Primary&quot;);
+</span><span>            instances += (1, &quot;Secondary&quot;);
+</span><span>            announce eMonitor_ConsistencyInit, instances;
+</span><span>            dbs = BuildDatabases(instances);
+</span><span>            server = new Server((primary = dbs.0, followers = dbs.1, startAt = 0, messageCount = 10));
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Running <code>p check -tc tcPerfectDualWrites -i 100</code> provides another <code>.... Found 0 bugs.</code>. This makes sense. With no
+concurrency or errors this shouldn't fail. This is also why you rarely detect issues with dual writes in development
+or staging environments unless you perform load testing and then run scripts to verify consistency of your data.</p>
+<h3 id="our-first-bug">Our First Bug</h3>
+<p>Time to try it with multiple servers writing to the databases. I'm going to omit the test case machine since it looks
+just like the last one except we initialize two servers with two different <code>startAt</code> values. Running with <code>-tc tcTwoServerDualWrites</code>
+should find a bug pretty fast. You'll see something like the following:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>...A bunch of stuff about all the state machines booting up and maybe some initial messages
+</span><span>&lt;SendLog&gt; &#39;Server(6)&#39; in state &#39;SendMessages&#39; sent event &#39;eWriteReq with payload (20)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eWriteReq with payload (20)&#39; in state &#39;WaitForRequests&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Primary,20,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Primary,20,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;SendLog&gt; &#39;Server(5)&#39; in state &#39;SendMessages&#39; sent event &#39;eWriteReq with payload (1)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;SendLog&gt; &#39;Server(5)&#39; in state &#39;SendMessages&#39; sent event &#39;eWriteReq with payload (1)&#39; to &#39;Database(4)&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eWriteReq with payload (1)&#39; in state &#39;WaitForRequests&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Primary,1,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Primary,1,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(4)&#39; dequeued event &#39;eWriteReq with payload (0)&#39; in state &#39;WaitForRequests&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(4)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Secondary,0,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Secondary,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(4)&#39; dequeued event &#39;eWriteReq with payload (1)&#39; in state &#39;WaitForRequests&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(4)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Secondary,1,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Secondary,1,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;ErrorLog&gt; Assertion Failed: Sequences are out of order
+</span></code></pre>
+<p>Server B sent its payload <code>20</code> to the primary, has not yet sent it to the secondary. Server A slips it's payload <code>1</code> over to both
+the primary and the secondary. In this run the primary saw <code>0, 20, 1</code> and the secondary saw <code>0, 1</code> before the assertion tripped.</p>
+<h3 id="our-second-bug">Our Second Bug</h3>
+<p>We assume the writes to the primary won't fail. In a live system these might happen within a transaction boundary so if the request
+fails it gets rolled back and we return an error to the user. We care about the fallibility of writing to the secondary more
+because its harder to fix problems there. If that write fails it probably isn't trivial to undo the transaction that just
+completed, and you may not want to return an error to the user since their write <em>did</em> complete on the primary.</p>
+<p>We can model this failure with the simpler single server scenario. We just need to make the write to the secondary fallible
+in our model. One way to do that is with <code>$</code> which tells the model checker to branch. This is the update to the <code>Server</code> machine:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state SendMessages {
+</span><span>    entry {
+</span><span>        while (counter &lt; messageCount) {
+</span><span>            send primary, eWriteReq, startAt + counter;
+</span><span>            foreach (follower in followers) {
+</span><span>                // now sometimes the secondary won&#39;t receive the message
+</span><span>                if ($) {
+</span><span>                    send follower, eWriteReq, startAt + counter;
+</span><span>                }
+</span><span>            }
+</span><span>            counter = counter + 1;
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>If we re-run the now imperfectly named <code>tcPerfectDualWrites</code> we will either see an output very similar to the above, or a
+liveness violation as the sequences fail to converge. If you're following along and want to force a liveness violation you
+can remove the assertion in <code>Consistency.p</code> or move it so it only gets checked when the sequences have the same length. Some
+writes to the secondary are getting lost, the system never converges on a consistent state.</p>
+<h2 id="doing-better">Doing Better</h2>
+<p>When you have the server perform dual writes to update followers you are essentially working with leaderless replication.
+You have all the problems of such a system, such as write conflicts and asynchronicity, with none of the tools to help
+you get to a consistent state like quorum reads/writes. You also don't get any of the performance or additional uptime
+benefits that a leaderless system implies.</p>
+<p>All of the solutions I describe below are essentially bringing you back to a single-leader style of replication. <em>One</em>
+data store operates as the source of truth and all the follower databases asynchronously update themselves from a
+consistent view of that database. All of these are asynchronous and rely on a log to arrive on a consistent state.</p>
+<p>All of these mechanisms also provide <em>at least once</em> delivery semantics. This means that every event in the log will make
+it to a follower at least one time. Followers, or the gateways in front of them, will need to account for duplicate
+delivery. As far as I'm aware this is unavoidable. If the update mechanism uses something like RabbitMQ the consumer
+might commit the update for the event and then crash before sending the <code>ACK</code>. Similarly, a Kafka consumer might handle
+a message before comitting the updated offset with the broker.</p>
+<h3 id="change-data-capture">Change Data Capture</h3>
+<p>This is essentially how transactional databases keep their followers up to date. After the leader database commits its change
+it writes that change set to a log. Followers consume that log to update their own state. <a href="https://debezium.io/">Debezium</a> is
+a tool that does this for some transactional databases. It consumes the WAL of the database and then uses Kafka to create
+a log that consumers can pull from so that many secondary systems can update their own state.</p>
+<p>Mongo DB provides <a href="https://www.mongodb.com/docs/manual/changeStreams/">change streams</a> which is a similar concept but logical
+replication is provided as a service directly by the database. If you wrote those change events to a durable log like Kafka
+you would have a very similar system to Debezium. The <a href="https://www.mongodb.com/docs/manual/changeStreams/#resume-a-change-stream">resume token</a> provides a mechanism for recovering from failure. The recipient system can commit a token, such
+as the offset or logical timestamp, in the same transaction it commits the results of processing the event so that it
+does not process duplicates. The <a href="https://docs.confluent.io/kafka/design/delivery-semantics.html#consumer-receipt">Kafka docs</a>
+describe something like this.</p>
+<p>If your database provides a CDC mechanism or is supported by a CDC tool like Debezium this is a pretty good bet.</p>
+<h3 id="transactional-outbox">Transactional Outbox</h3>
+<p>Typically a microservices pattern, <a href="https://microservices.io/patterns/data/transactional-outbox.html">transactional outbox</a> is
+also useful for performing logical replication. This pattern relies on your primary database having the ability to update
+multiple tables/collections within a single transaction. Most relational databases provide this. <em>Some</em> document databases
+also provide this but often come with a substantial performance penalty.</p>
+<p>The idea here is that within the same transaction as your other updates, you write events to an outbox collection. If the
+transaction fails the events never become visible outside that transaction. You might use an additional service to pull from
+that outbox and write to a log that other systems pull from, or expose an API that allows other services to pull events since
+since checkpoint value that they track internally.</p>
+<p>If you're already using a transactional database, this can be an easy pattern to get started with and help close the gaps
+in your existing tools without having to stand up new infrastructure.</p>
+<h3 id="event-sourcing">Event Sourcing</h3>
+<p>This flips the replication mechanism on its head. All events are recorded in an append-only data store and other databases
+derive a view of that data by pulling events from that log. There are some more details <a href="https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing">here</a> or the oodles of blogs and videos describing the pattern. For the purpose of consistency
+alone it may be overkill but there are some additional advantages.</p>
+<ul>
+<li>Your application is built from an audit log. You know your log is complete because all visible state is derived from it.</li>
+<li>Writes are effectively serialized around the log which can mitigate some concurrency issues.</li>
+<li>Appending events to storage is very fast.</li>
+</ul>
+<p>There are some headaches you need to be aware of though:</p>
+<ul>
+<li>The system is async all the way through. If a user expects to read their own writes immediately after they hit submit you'll
+need to delay their read until the follower you're interested in catches up.</li>
+<li>It becomes harder to set constraints on your system because you usually check those conditions against the state of the database.
+That database is probably behind. You'll need to think about compensating transactions to get your system back into a state that is
+considered valid for your business rules.</li>
+<li>The oft-touted ability to replay all events in history becomes a lot more complicated when the handlers for those events might
+interact with third party systems. You may also need to log the responses of all external systems so they can be replayed as well.</li>
+</ul>
+<p>You might be able to use a transactional database as an event store. This would allow you to commit the events and process them on
+<em>one of</em> your views within the same transaction. Users would be able to read their own writes and you could do some consistency
+checks. Other systems would update from the event log as normal.
+However, it would be very easy to write to the derived tables directly and not actually use the event log which could
+undermine its integrity. This could also make your primary datastore a throughput bottleneck if you were looking at event
+sourcing for performance reasons.</p>
+<h2 id="modeling-a-solution">Modeling a Solution</h2>
+<p>The model we're creating would work for either change data capture or transactional outbox. They're essentially different
+implementations of the same approach.</p>
+<h3 id="simplified-but-incomplete">Simplified, but Incomplete</h3>
+<p>We're going to start with a simplified version of our replication log. It gets us to the state of having a leader
+database and followers and passes writes to followers through the leader instead of the server.</p>
+<p>A database can now be either leading or following:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state WaitForRequests {
+</span><span>    on eWriteReq do (val: int) {
+</span><span>        txId = txId + 1;
+</span><span>        announce eWriteRecorded, (name, val);
+</span><span>        foreach (replica in replicas) {
+</span><span>            send replica, eUpdateFollower, (txId = txId, value = val);
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>state Following {
+</span><span>    on eUpdateFollower do (payload: tFollowerMsg) {
+</span><span>        announce eWriteRecorded, (name, payload.value);
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>The replicator machine sits between the leader database and its follower. This is your Kafka consumer pulling events
+off the log to store updates or whatever mechanism you choose to update the log into the follower. We could just as
+easily model this system without the <code>Replicator</code> but it's going to have a little more logic soon and I didn't want
+to bloat the <code>Database</code> machine too much. For the moment it's just proxying update events to a follower:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine Replicator {
+</span><span>    state SyncingFollower {
+</span><span>        on eUpdateFollower do (payload: tFollowerMsg) {
+</span><span>            send target, eUpdateFollower, payload;
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>We then set up the test case:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine LeaderFollower {
+</span><span>    ... declarations
+</span><span>    start state Init {
+</span><span>        entry {
+</span><span>            instances += (0, &quot;Leader&quot;);
+</span><span>            instances += (1, &quot;Follower&quot;);
+</span><span>            announce eMonitor_ConsistencyInit, instances;
+</span><span>            // initialize the follower first and assign it to the replicator
+</span><span>            follower = new Database((name = &quot;Follower&quot;, replicas = default(set[Replicator]), isLeader = false));
+</span><span>            replicators += (new Replicator(follower));
+</span><span>            // leader knows about its replicas, servers only talk to the leader
+</span><span>            leader = new Database((name = &quot;Leader&quot;, replicas = replicators, isLeader = true));
+</span><span>            servers += (new Server((primary = leader, followers = default(set[Database]), startAt = 0, messageCount = 10)));
+</span><span>            servers += (new Server((primary = leader, followers = default(set[Database]), startAt = 20, messageCount = 10)));
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Running this shows no bugs, but we know this isn't quite complete. Let's talk about at least once delivery again.</p>
+<h3 id="errors-updating-the-follower">Errors updating the follower</h3>
+<p>First off, we're going to assume writes to a follower <em>eventually</em> succeed. If the follower crashes and never
+recovers we clearly cannot achieve consistency. We know that a follower might crash before sending an <code>ack</code> or
+that the response can get lost on the network. We should model what that looks like and account for it.</p>
+<p>We'll model the <code>Replicator</code> like it's a consumer from the log writing into the database. This is a synchronous
+action so it will wait for a reply confirming the write. If it fails it will retry until it succeeds. This is
+how we maintain event ordering but it's also why we can't do it inside the request handler process. Replication
+lag is acceptable to some extend in a background process, not at all so within a request handler in the server.</p>
+<p>On the database side we'll just model the &quot;reply never comes&quot; problem. Errors are handled the same way so it would
+just be noise in the model.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Following {
+</span><span>    on eUpdateFollower do (payload: tFollowerMsg) {
+</span><span>        announce eWriteRecorded, (name, payload.message.value);
+</span><span>        if ($) {
+</span><span>            send payload.replyTo, eAckWrite;
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>The event payload has been updated to have the machine to reply to and the actual event payload is under the
+<code>message</code> property of the event. Because of the <code>$</code> sometimes we'll just drop the reply on the floor.</p>
+<p>The replicator implementation is now:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state SyncingFollower {
+</span><span>    on eReplicateWrite do (payload: tReplicateMsg) {
+</span><span>        writeSucceeded = false;
+</span><span>        while (!writeSucceeded) {
+</span><span>            send target, eUpdateFollower, (replyTo = this, message = payload);
+</span><span>            receive {
+</span><span>                case eAckWrite: {
+</span><span>                    writeSucceeded = true;
+</span><span>                }
+</span><span>            }
+</span><span>        }
+</span><span>        
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>We keep trying to send the message to the follower until it replies before moving on to the next message. If
+we run the spec now we should get an error like the following:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&lt;SendLog&gt; &#39;Replicator(4)&#39; in state &#39;SyncingFollower&#39; sent event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;ReceiveLog&gt; Replicator(4) is waiting to dequeue an event of type &#39;eAckWrite&#39; or &#39;PHalt&#39; in state &#39;SyncingFollower&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; in state &#39;Following&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Follower,0,&gt;.&lt;MonitorLog&gt; PImplementation.
+</span><span>ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Follower,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>// notice the lack of ack
+</span><span>...
+</span><span>&lt;ErrorLog&gt; Deadlock detected. Replicator(4) is waiting to receive an event, but no other controlled tasks are enabled.
+</span></code></pre>
+<p>That one makes sense, we're not timing out our wait so the replicator is effectively dead waiting on a network
+reply that never comes. I pulled in a <code>Timer</code> module from the P lang's example repo and added that to the
+replicator. The receive block now waits on an <code>ack</code> or times out where it will retry the message.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>receive {
+</span><span>    case eAckWrite: {
+</span><span>        writeSucceeded = true;
+</span><span>        CancelTimer(timer);
+</span><span>    }
+</span><span>    case eTimeOut: {
+</span><span>        print format(&quot;Timed out with tx: {0}, retrying&quot;, payload.txId);
+</span><span>        StartTimer(timer);
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>You probably know where this is going.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&lt;SendLog&gt; &#39;Replicator(4)&#39; in state &#39;SyncingFollower&#39; sent event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;ReceiveLog&gt; &#39;Replicator(4)&#39; dequeued event &#39;eTimeOut&#39; in state &#39;SyncingFollower&#39;.
+</span><span>&lt;PrintLog&gt; Timed out with tx: 1, retrying
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; in state &#39;Following&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Follower,0,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Follower,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;SendLog&gt; &#39;Replicator(4)&#39; in state &#39;SyncingFollower&#39; sent event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;ReceiveLog&gt; Replicator(4) is waiting to dequeue an event of type &#39;eAckWrite&#39;, &#39;eTimeOut&#39; or &#39;PHalt&#39; in state &#39;SyncingFollower&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; in state &#39;Following&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Follower,0,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Follower,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;ErrorLog&gt; Assertion Failed: Sequences are out of order
+</span><span>&lt;StrategyLog&gt; Found bug using &#39;random&#39; strategy.
+</span></code></pre>
+<p>This isn't what I expected, but it also makes sense. In this case the replicator timed out waiting on the
+send to the follower so it retried. However, both messages actually made it to the follower <em>eventually</em>, we just
+didn't wait long enough for the <code>ack</code>. Of course in the real world it's hard to tell how long is long enough so
+you need to account for such things.</p>
+<h3 id="successful-replication">Successful Replication</h3>
+<p>We're already passing around a transaction ID generated in the leader so we have the information we need
+to handle duplicate messages that come in on the follower.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Following {
+</span><span>    on eUpdateFollower do (payload: tFollowerMsg) {
+</span><span>        if (payload.message.txId &gt; txId) {
+</span><span>            announce eWriteRecorded, (name, payload.message.value);
+</span><span>            txId = payload.message.txId;
+</span><span>        }
+</span><span>        
+</span><span>        if ($) {
+</span><span>            send payload.replyTo, eAckWrite;
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>We only process (store) the command if the transaction ID is greater than our last seen transaction. Because the replicator
+will keep trying indefinitely until it knows the message was stored, these duplicates are still in processing order. Once
+the replicator knows the command was saved it can move on to the next one. <em>Eventually</em> our databases become consistent.
+If you look over the checker output you'll see that on some schedules it takes quite a while to get there between timeouts
+and dropped <code>ack</code> replies but we get there in the end.</p>
+<p>Mission Accomplished.</p>
+<h2 id="reflecting-on-p">Reflecting on P</h2>
+<p>The P language, like TLA+ is a relatively niche project. Microsoft has been supporting it well and 2.0 is a step towards
+being easier to use with simplified installation and commands. I have a lot of hope for this project.</p>
+<p>The main pain points right now, at least for me, are:</p>
+<ul>
+<li>Compiler output is pretty simplistic. Better compiler errors would help, but I always managed to get there eventually.</li>
+<li>There's not really any syntax highlighting available. It's mentioned on the site but at least in vscode it doesn't seem
+to work. This makes the compiler errors more important. I found myself in more of a code/compile/fix/repeat loop than in
+other development I do.</li>
+<li>I used the wrong iterator variable once and figuring out why I had an index out of range error was <em>tough</em> since I got
+more stack trace from the internals than from the P spec itself. I had to add a bunch of print statements since I only
+knew which state in which machine rather than which line was causing the problem.</li>
+</ul>
+<p>P programs are supposed to be high level models rather than full fledged implementations so some of these issues
+are tolerable in a modeling language while they would be a deal breaker in a full fledged implementation language.</p>
+<h2 id="distributed-transactions">Distributed Transactions</h2>
+<p>Instead of asynchronous replication you <em>could</em> attempt a distributed transaction protocol like Two Phase Commit.
+That's usually not a viable option. 2PC reduces throughput, concurrency, and reliability. You may also be using a
+database without a concept of a rollback meaning you'll have to build a complex protocol over your storage to
+serialize writes. There's a pretty good post <a href="https://dbmsmusings.blogspot.com/2019/01/its-time-to-move-on-from-two-phase.html">here</a>
+but the limitations of 2PC are written about in many places.</p>
+
+    </div>
+</article>
+
+        </main>
+        
+        <footer>
+            
+            <div class="border"></div>
+            <div class="footer">
+                <small class="footer-left">
+                    Copyright &copy; Michael
+                </small>
+                <small class="footer-right">
+                    Powered by <a href="https://www.getzola.org">Zola</a> | Theme <a href="https://github.com/barlog-m/oceanic-zen">Oceanic Zen</a>
+                </small>
+            </div>
+        
+        </footer>
+    
+        </div>
+    </body>
+</html>
