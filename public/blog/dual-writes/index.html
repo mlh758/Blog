@@ -85,23 +85,23 @@ systems can fail.</li>
 <li><a href="https://www.youtube.com/watch?v=MYD4rrIqDhA">This video on event sourcing</a>. I like it because it's a good summary of what event sourcing is, what problems it can solve for you, and what tools offer similar solutions for simpler scenarios.</li>
 </ul>
 <h2 id="choosing-dual-writes">Choosing Dual Writes</h2>
-<p>Once you have onr or more secondary data stores you have to decide how to keep it in sync with
+<p>Once you have one or more secondary data stores you have to decide how to keep it in sync with
 the primary database. The obvious choice, and one I see chosen frequently, is to write
 a value to the primary storage and then write a value to the secondary storage.
 If you have several additional storage mechanisms you might write to the primary and then
-enqueue a job (itself a write to a remote system) to make the updates to the additional systems.
+enqueue a job (itself a write to a remote system) to make the updates to those additional systems.
 I've also seen what at first glance appears to be a more sophisticated approach where a write
 is done against the primary database then then an event enqueued to notify additional systems
 to make their updates. In reality however, this is equivalent to the job mechanism I described
 earlier as both rely on a write to a secondary system to succeed.</p>
 <p>In Rails this kind of thing is <em>very</em> common even among large community gems. Sidekiq is a
-common job runner that uses Redis to store a job queue. <code>ActiveRecord</code> provides lifecycle
+popular job runner that uses Redis to store a job queue. <code>ActiveRecord</code> provides lifecycle
 callbacks on your data models so that tasks can be run <code>after_commit</code>. Gems like <a href="https://github.com/sunspot/sunspot">sunspot</a>
 use that to trigger updates to a search index after a model is updated and the transaction
 commits.</p>
 <p>The most insidious thing about this approach is that most of the time <em>it works</em>.</p>
 <h2 id="the-problem-with-dual-writes">The Problem With Dual Writes</h2>
-<p>When things go wrong with this mechanism it's usually rare, sometimes subtle, and usually difficult to
+<p>When things go wrong with this mechanism it's usually rare, sometimes subtle, and often difficult to
 reproduce outside of production where infrastructure is more complicated and traffic volumes are
 higher.</p>
 <p>Let's assume you have two servers, A and B. Your primary database is PostgreSQL and you
@@ -330,8 +330,8 @@ multiple tables/collections within a single transaction. Most relational databas
 also provide this but often come with a substantial performance penalty.</p>
 <p>The idea here is that within the same transaction as your other updates, you write events to an outbox collection. If the
 transaction fails the events never become visible outside that transaction. You might use an additional service to pull from
-that outbox and write to a log that other systems pull from, or expose an API that allows other services to pull events since
-since checkpoint value that they track internally.</p>
+that outbox and write to a log that other systems pull from, or expose an API that allows other services to pull events with a
+checkpoint value that they track internally.</p>
 <p>If you're already using a transactional database, this can be an easy pattern to get started with and help close the gaps
 in your existing tools without having to stand up new infrastructure.</p>
 <h3 id="event-sourcing">Event Sourcing</h3>
@@ -364,7 +364,7 @@ sourcing for performance reasons.</p>
 implementations of the same approach.</p>
 <h3 id="simplified-but-incomplete">Simplified, but Incomplete</h3>
 <p>We're going to start with a simplified version of our replication log. It gets us to the state of having a leader
-database and followers and passes writes to followers through the leader instead of the server.</p>
+database with followers and passes writes to followers through the leader instead of the server.</p>
 <p>A database can now be either leading or following:</p>
 <pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state WaitForRequests {
 </span><span>    on eWriteReq do (val: int) {
@@ -433,7 +433,7 @@ just be noise in the model.</p>
 </span><span>    }
 </span><span>}
 </span></code></pre>
-<p>The event payload has been updated to have the machine to reply to and the actual event payload is under the
+<p>The event payload has been updated to contain the machine to reply to and the actual event payload is under the
 <code>message</code> property of the event. Because of the <code>$</code> sometimes we'll just drop the reply on the floor.</p>
 <p>The replicator implementation is now:</p>
 <pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state SyncingFollower {
@@ -464,7 +464,7 @@ we run the spec now we should get an error like the following:</p>
 </span></code></pre>
 <p>That one makes sense, we're not timing out our wait so the replicator is effectively dead waiting on a network
 reply that never comes. I pulled in a <code>Timer</code> module from the P lang's example repo and added that to the
-replicator. The receive block now waits on an <code>ack</code> or times out where it will retry the message.</p>
+replicator. The receive block now waits on an <code>ack</code> or times out at which point it will retry the message.</p>
 <pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>receive {
 </span><span>    case eAckWrite: {
 </span><span>        writeSucceeded = true;

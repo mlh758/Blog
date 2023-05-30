@@ -33,18 +33,18 @@ systems can fail.
 
 ## Choosing Dual Writes
 
-Once you have onr or more secondary data stores you have to decide how to keep it in sync with
+Once you have one or more secondary data stores you have to decide how to keep it in sync with
 the primary database. The obvious choice, and one I see chosen frequently, is to write
 a value to the primary storage and then write a value to the secondary storage.
 If you have several additional storage mechanisms you might write to the primary and then
-enqueue a job (itself a write to a remote system) to make the updates to the additional systems.
+enqueue a job (itself a write to a remote system) to make the updates to those additional systems.
 I've also seen what at first glance appears to be a more sophisticated approach where a write
 is done against the primary database then then an event enqueued to notify additional systems
 to make their updates. In reality however, this is equivalent to the job mechanism I described
 earlier as both rely on a write to a secondary system to succeed.
 
 In Rails this kind of thing is _very_ common even among large community gems. Sidekiq is a
-common job runner that uses Redis to store a job queue. `ActiveRecord` provides lifecycle
+popular job runner that uses Redis to store a job queue. `ActiveRecord` provides lifecycle
 callbacks on your data models so that tasks can be run `after_commit`. Gems like [sunspot](https://github.com/sunspot/sunspot)
 use that to trigger updates to a search index after a model is updated and the transaction
 commits.
@@ -53,7 +53,7 @@ The most insidious thing about this approach is that most of the time _it works_
 
 ## The Problem With Dual Writes
 
-When things go wrong with this mechanism it's usually rare, sometimes subtle, and usually difficult to
+When things go wrong with this mechanism it's usually rare, sometimes subtle, and often difficult to
 reproduce outside of production where infrastructure is more complicated and traffic volumes are
 higher.
 
@@ -334,8 +334,8 @@ also provide this but often come with a substantial performance penalty.
 
 The idea here is that within the same transaction as your other updates, you write events to an outbox collection. If the
 transaction fails the events never become visible outside that transaction. You might use an additional service to pull from
-that outbox and write to a log that other systems pull from, or expose an API that allows other services to pull events since
-since checkpoint value that they track internally.
+that outbox and write to a log that other systems pull from, or expose an API that allows other services to pull events with a
+checkpoint value that they track internally.
 
 If you're already using a transactional database, this can be an easy pattern to get started with and help close the gaps
 in your existing tools without having to stand up new infrastructure.
@@ -375,7 +375,7 @@ implementations of the same approach.
 ### Simplified, but Incomplete
 
 We're going to start with a simplified version of our replication log. It gets us to the state of having a leader
-database and followers and passes writes to followers through the leader instead of the server.
+database with followers and passes writes to followers through the leader instead of the server.
 
 A database can now be either leading or following:
 
@@ -461,7 +461,7 @@ state Following {
 }
 ```
 
-The event payload has been updated to have the machine to reply to and the actual event payload is under the
+The event payload has been updated to contain the machine to reply to and the actual event payload is under the
 `message` property of the event. Because of the `$` sometimes we'll just drop the reply on the floor.
 
 The replicator implementation is now:
@@ -499,7 +499,7 @@ ConsistencyInvariant is processing event 'eWriteRecorded with payload (<Follower
 
 That one makes sense, we're not timing out our wait so the replicator is effectively dead waiting on a network
 reply that never comes. I pulled in a `Timer` module from the P lang's example repo and added that to the
-replicator. The receive block now waits on an `ack` or times out where it will retry the message.
+replicator. The receive block now waits on an `ack` or times out at which point it will retry the message.
 
 ```
 receive {
