@@ -39,7 +39,7 @@ a value to the primary storage and then write a value to the secondary storage.
 If you have several additional storage mechanisms you might write to the primary and then
 enqueue a job (itself a write to a remote system) to make the updates to those additional systems.
 I've also seen what at first glance appears to be a more sophisticated approach where a write
-is done against the primary database then then an event enqueued to notify additional systems
+is done against the primary database then an event enqueued to notify additional systems
 to make their updates. In reality however, this is equivalent to the job mechanism I described
 earlier as both rely on a write to a secondary system to succeed.
 
@@ -72,7 +72,7 @@ index and _then_ server A enqueues the task to update X = 2. Now the primary say
 and the search index says X = 2.
 
 You could mitigate some ordering problems with [Lamport Timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) created in the primary database but only if the updates cause no side effects in the secondary systems. It may also not be clear where your transaction boundaries
-are in sufficiently messy code. You may end up eunqueueing jobs in the middle of a large
+are in sufficiently messy code. You may end up enqueing jobs in the middle of a large
 transaction that gets rolled back. Now you have emitted events for an operation that
 never occurred. Even if you get the transaction boundaries right, the potential for
 data loss just gets bigger if that job with the accumulated events then falls on the floor.
@@ -307,7 +307,7 @@ All of these mechanisms also provide _at least once_ delivery semantics. This me
 it to a follower at least one time. Followers, or the gateways in front of them, will need to account for duplicate
 delivery. As far as I'm aware this is unavoidable. If the update mechanism uses something like RabbitMQ the consumer
 might commit the update for the event and then crash before sending the `ACK`. Similarly, a Kafka consumer might handle
-a message before comitting the updated offset with the broker.
+a message before committing the updated offset with the broker.
 
 ### Change Data Capture
 
@@ -445,7 +445,7 @@ that the response can get lost on the network. We should model what that looks l
 We'll model the `Replicator` like it's a consumer from the log writing into the database. This is a synchronous
 action so it will wait for a reply confirming the write. If it fails it will retry until it succeeds. This is
 how we maintain event ordering but it's also why we can't do it inside the request handler process. Replication
-lag is acceptable to some extend in a background process, not at all so within a request handler in the server.
+lag is acceptable to some extent in a background process, not at all so within a request handler in the server.
 
 On the database side we'll just model the "reply never comes" problem. Errors are handled the same way so it would
 just be noise in the model.
