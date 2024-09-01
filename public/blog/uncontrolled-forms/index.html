@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        
+
+        <title></title>
+
+        
+            <link rel="stylesheet" href="https://webshittery.com/theme.css">
+        
+        
+    </head>
+    <body>
+        <div class="content">
+        
+        
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;webshittery.com" class="logo"></a>
+                </div>
+                <div class="header-right">
+                    <nav itemscope itemtype="http://schema.org/SiteNavigationElement">
+                      <ul>
+                        
+                        
+                            
+                            <li class="nav">
+                                <a itemprop="url" href="https://webshittery.com/blog/">
+                                    <span itemprop="name">Blog</span>
+                                </a>
+                            </li>
+                        
+                        
+                        <li class="nav">
+                            <a itemprop="url" href="https://github.com/mlh758">
+                                <img class="icon" src="https:&#x2F;&#x2F;webshittery.com/icons/github.svg" alt="Github">
+                            </a>
+                        </li>
+                        
+                        
+                      </ul>
+                    </nav>
+                </div>
+            </header>
+        
+        
+        <main>
+            
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div itemprop="headline">
+        <h1>These Forms are Out of Control</h1>
+        <div class="border"></div>
+        <time datetime="2022-06-11" class="date" itemprop="datePublished">
+            11 Jun 2022
+        </time>
+    </div>
+    <div itemprop="articleBody">
+        <p>If you visit the React documentation for <a href="https://reactjs.org/docs/uncontrolled-components.html">Uncontrolled Components</a> you will be greeted by header text telling you that
+controlled components are the current recommended default. It also tells you that you will need a ref to get the value out of an uncontrolled input and links to a <a href="https://goshacmd.com/controlled-vs-uncontrolled-inputs-react/">blog</a> saying essentially the same thing. If this was your introduction to the tradeoffs of using controlled vs uncontrolled inputs you would understandably avoid uncontrolled inputs in your forms.
+This would be doubly true after reading the React docs saying this about when you might use uncontrolled inputs:</p>
+<blockquote>
+<p>It can also be slightly less code if you want to be quick and dirty.</p>
+</blockquote>
+<p>A resounding endorsement in my book. However, I think this is worth a more careful look and this post is going to go into more depth on the value of uncontrolled inputs.</p>
+<p>I'm going to assume you already know React. All of my examples will be in Typescript with Material UI although I'll keep the MUI specific content to a minimum in this post. Mostly it's just nice to
+have JSS around so I can have the styling in the same files for the examples.</p>
+<h2 id="a-basic-form">A Basic Form</h2>
+<p>With a controlled input some React component needs to track the state of all inputs in component state. Using uncontrolled components, we can let the DOM do all that work for us. HTML forms
+are designed for this, why not leverage the tools the browser provides?</p>
+<p>I'll be working with a file called <code>Form.tsx</code>. We'll keep adding to it as we go through the examples and build it up. The complete files are available in <a href="https://gist.github.com/mlh758/b133882b70f5a7c5ccdae3a61be82a19">this gist</a>.</p>
+<pre data-lang="tsx" style="background-color:#2b303b;color:#c0c5ce;" class="language-tsx "><code class="language-tsx" data-lang="tsx"><span style="color:#b48ead;">import </span><span style="color:#bf616a;">React</span><span>, { </span><span style="color:#bf616a;">useCallback </span><span>} </span><span style="color:#b48ead;">from </span><span>&quot;</span><span style="color:#a3be8c;">react</span><span>&quot;;
+</span><span style="color:#b48ead;">import </span><span>{ </span><span style="color:#bf616a;">makeStyles </span><span>} </span><span style="color:#b48ead;">from </span><span>&quot;</span><span style="color:#a3be8c;">@material-ui/core</span><span>&quot;;
+</span><span>
+</span><span style="color:#65737e;">// Just some basic styling to keep the form flowing top to bottom
+</span><span style="color:#65737e;">// with a little spacing.
+</span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">useStyles </span><span>= </span><span style="color:#8fa1b3;">makeStyles</span><span>((</span><span style="color:#bf616a;">theme</span><span>) </span><span style="color:#b48ead;">=&gt; </span><span>({
+</span><span>  validatedForm: {
+</span><span>    &quot;</span><span style="color:#a3be8c;">&amp; label</span><span>&quot;: {
+</span><span>      display: &quot;</span><span style="color:#a3be8c;">block</span><span>&quot;,
+</span><span>      marginBottom: </span><span style="color:#bf616a;">theme</span><span>.</span><span style="color:#8fa1b3;">spacing</span><span>(</span><span style="color:#d08770;">2</span><span>),
+</span><span>      &quot;</span><span style="color:#a3be8c;">&amp; &gt; span</span><span>&quot;: {
+</span><span>        marginRight: </span><span style="color:#bf616a;">theme</span><span>.</span><span style="color:#8fa1b3;">spacing</span><span>(</span><span style="color:#d08770;">1</span><span>),
+</span><span>      }
+</span><span>    }
+</span><span>  }
+</span><span>}));
+</span><span>
+</span><span style="color:#b48ead;">export const </span><span style="color:#8fa1b3;">Form </span><span>= () </span><span style="color:#b48ead;">=&gt; </span><span>{
+</span><span>  </span><span style="color:#65737e;">// The submit handler, you might not even actually need this if you just want to
+</span><span>  </span><span style="color:#65737e;">// POST form data to your server but I&#39;m adding it to show how you could use it.
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">handleSubmit </span><span>= </span><span style="color:#8fa1b3;">useCallback</span><span>((</span><span style="color:#bf616a;">e</span><span>: React.FormEvent) </span><span style="color:#b48ead;">=&gt; </span><span>{
+</span><span>    </span><span style="color:#bf616a;">e</span><span>.</span><span style="color:#96b5b4;">preventDefault</span><span>();
+</span><span>    </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">formData </span><span>= new FormData(</span><span style="color:#bf616a;">e</span><span>.target </span><span style="color:#b48ead;">as </span><span>HTMLFormElement);
+</span><span>    </span><span style="color:#bf616a;">formData</span><span>.</span><span style="color:#96b5b4;">forEach</span><span>((</span><span style="color:#bf616a;">val</span><span>, </span><span style="color:#bf616a;">key</span><span>) </span><span style="color:#b48ead;">=&gt; </span><span style="color:#ebcb8b;">console</span><span>.</span><span style="color:#96b5b4;">log</span><span>(`</span><span style="color:#a3be8c;">${</span><span style="color:#bf616a;">key</span><span style="color:#a3be8c;">} =&gt; ${</span><span style="color:#bf616a;">val</span><span style="color:#a3be8c;">}</span><span>`));
+</span><span>  }, []);
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">styles </span><span>= </span><span style="color:#8fa1b3;">useStyles</span><span>();
+</span><span>  </span><span style="color:#b48ead;">return </span><span>(
+</span><span>    &lt;</span><span style="color:#bf616a;">div</span><span>&gt;
+</span><span>      &lt;</span><span style="color:#bf616a;">h1</span><span>&gt;Give me all your personal information&lt;/</span><span style="color:#bf616a;">h1</span><span>&gt;
+</span><span>      &lt;</span><span style="color:#bf616a;">form </span><span style="color:#d08770;">onSubmit</span><span>=</span><span style="color:#ab7967;">{</span><span style="color:#bf616a;">handleSubmit</span><span style="color:#ab7967;">} </span><span style="color:#d08770;">className</span><span>=</span><span style="color:#ab7967;">{</span><span style="color:#bf616a;">styles</span><span>.</span><span style="color:#bf616a;">validatedForm</span><span style="color:#ab7967;">}</span><span>&gt;
+</span><span>        &lt;</span><span style="color:#bf616a;">label</span><span>&gt;
+</span><span>          &lt;</span><span style="color:#bf616a;">span</span><span>&gt;Legal Name&lt;/</span><span style="color:#bf616a;">span</span><span>&gt;
+</span><span>          &lt;</span><span style="color:#bf616a;">input </span><span style="color:#d08770;">name</span><span>=&quot;</span><span style="color:#a3be8c;">fullname</span><span>&quot; /&gt;
+</span><span>        &lt;/</span><span style="color:#bf616a;">label</span><span>&gt;
+</span><span>        &lt;</span><span style="color:#bf616a;">label</span><span>&gt;
+</span><span>          &lt;</span><span style="color:#bf616a;">span</span><span>&gt;Date of Birth&lt;/</span><span style="color:#bf616a;">span</span><span>&gt;
+</span><span>          &lt;</span><span style="color:#bf616a;">input </span><span style="color:#d08770;">type</span><span>=&quot;</span><span style="color:#a3be8c;">date</span><span>&quot; </span><span style="color:#d08770;">name</span><span>=&quot;</span><span style="color:#a3be8c;">dob</span><span>&quot; </span><span style="color:#d08770;">required </span><span>/&gt;
+</span><span>        &lt;/</span><span style="color:#bf616a;">label</span><span>&gt;
+</span><span>        &lt;</span><span style="color:#bf616a;">button </span><span style="color:#d08770;">type</span><span>=&quot;</span><span style="color:#a3be8c;">submit</span><span>&quot;&gt;Submit&lt;/</span><span style="color:#bf616a;">button</span><span>&gt;
+</span><span>      &lt;/</span><span style="color:#bf616a;">form</span><span>&gt;
+</span><span>    &lt;/</span><span style="color:#bf616a;">div</span><span>&gt;
+</span><span>  );
+</span><span>};
+</span></code></pre>
+<p>Try filling this out and hitting submit. In your console you should see something like:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>fullname =&gt; John Smith
+</span><span>dob =&gt; 2022-06-10
+</span></code></pre>
+<p>If you don't access to input data as the user is typing, there is no need for a ref at all. When the form is submitted you can get access to it through
+the <a href="https://developer.mozilla.org/en-US/docs/Web/API/FormData">FormData</a> object. You can manipulate the form data here or add additional information and then
+send it on to your server using <code>fetch</code>. You could of course just use the <code>action</code> and <code>method</code> attributes on the form and have no <code>onSubmit</code> handler at all but
+I prefer to submit it manually so I can show a loading status on the page and display error messages inline if necessary.</p>
+<p>If you have React developer tools installed, enable the <code>Highlight updates when components render.</code> option and start mashing buttons. You shouldn't see the form re-rendering. This is
+another perk of not having to track form state in the component.</p>
+<h2 id="what-about-validation">What about validation?</h2>
+<p>Validation is where I traditionally see people switching back to controlled inputs. They want to be able to show hints if an input is invalid and block
+form submission until it is ready. Fortunately, there are ergonomic ways to do this with forms natively and we'll explore some basic ones in this section.</p>
+<p>Required fields automatically block form submission and you can use the <code>:valid</code> family of css pseudoclasses to apply styles or show hints around a form and inputs.</p>
+<h3 id="required-fields">Required Fields</h3>
+<p>This is the easiest type of validation to perform. Just mark an input as required and try to submit the form without it.</p>
+<pre data-lang="tsx" style="background-color:#2b303b;color:#c0c5ce;" class="language-tsx "><code class="language-tsx" data-lang="tsx"><span>&lt;</span><span style="color:#bf616a;">label</span><span>&gt;
+</span><span>  &lt;</span><span style="color:#bf616a;">span</span><span>&gt;Date of Birth&lt;/</span><span style="color:#bf616a;">span</span><span>&gt;
+</span><span>  &lt;</span><span style="color:#bf616a;">input </span><span style="color:#d08770;">type</span><span>=&quot;</span><span style="color:#a3be8c;">date</span><span>&quot; </span><span style="color:#d08770;">name</span><span>=&quot;</span><span style="color:#a3be8c;">dob</span><span>&quot; </span><span style="color:#d08770;">required </span><span>/&gt;
+</span><span>&lt;/</span><span style="color:#bf616a;">label</span><span>&gt;
+</span></code></pre>
+<p>You should see something like the screenshot below. The <code>onSubmit</code> handler will not have fired.</p>
+<p><img src="/uncontrolled-forms/dob_required.png" alt="date of birth required" /></p>
+<h3 id="user-feedback">User Feedback</h3>
+<p>Giving the user feedback as fill out the form can be done in a fairly straightforward way with the <code>:valid</code> and <code>:invalid</code> pseudo classes in css. Let's update the <code>jss</code>:</p>
+<pre data-lang="tsx" style="background-color:#2b303b;color:#c0c5ce;" class="language-tsx "><code class="language-tsx" data-lang="tsx"><span>validatedForm: {
+</span><span>  </span><span style="color:#65737e;">// all the existing stuff ...
+</span><span>  &quot;</span><span style="color:#a3be8c;">&amp; *:invalid</span><span>&quot;: {
+</span><span>    boxShadow: `</span><span style="color:#a3be8c;">0 0 5px 1px ${</span><span style="color:#bf616a;">theme</span><span style="color:#a3be8c;">.</span><span style="color:#bf616a;">palette</span><span style="color:#a3be8c;">.</span><span style="color:#bf616a;">error</span><span style="color:#a3be8c;">.</span><span style="color:#bf616a;">main</span><span style="color:#a3be8c;">}</span><span>`,
+</span><span>  },
+</span><span>  &quot;</span><span style="color:#a3be8c;">&amp; *:focus:invalid</span><span>&quot;: {
+</span><span>    boxShadow: &quot;</span><span style="color:#a3be8c;">none</span><span>&quot;,
+</span><span>  },
+</span><span>  &quot;</span><span style="color:#a3be8c;">&amp; *:valid ~ p</span><span>&quot;: {
+</span><span>    display: &quot;</span><span style="color:#a3be8c;">none</span><span>&quot;,
+</span><span>  },
+</span><span>}
+</span></code></pre>
+<p>And update the form with some new elements:</p>
+<pre data-lang="tsx" style="background-color:#2b303b;color:#c0c5ce;" class="language-tsx "><code class="language-tsx" data-lang="tsx"><span>&lt;</span><span style="color:#bf616a;">label</span><span>&gt;
+</span><span>  &lt;</span><span style="color:#bf616a;">span</span><span>&gt;Date of Birth&lt;/</span><span style="color:#bf616a;">span</span><span>&gt;
+</span><span>  &lt;</span><span style="color:#bf616a;">input </span><span style="color:#d08770;">type</span><span>=&quot;</span><span style="color:#a3be8c;">date</span><span>&quot; </span><span style="color:#d08770;">name</span><span>=&quot;</span><span style="color:#a3be8c;">dob</span><span>&quot; </span><span style="color:#d08770;">required </span><span>/&gt;
+</span><span>  &lt;</span><span style="color:#ebcb8b;">FormHelperText</span><span>&gt;Enter your date of birth&lt;/</span><span style="color:#ebcb8b;">FormHelperText</span><span>&gt;
+</span><span>&lt;/</span><span style="color:#bf616a;">label</span><span>&gt;
+</span><span>&lt;</span><span style="color:#bf616a;">label</span><span>&gt;
+</span><span>  &lt;</span><span style="color:#bf616a;">span</span><span>&gt;Tell us about yourself&lt;/</span><span style="color:#bf616a;">span</span><span>&gt;
+</span><span>  &lt;</span><span style="color:#bf616a;">textarea </span><span style="color:#d08770;">minLength</span><span>=</span><span style="color:#ab7967;">{</span><span style="color:#d08770;">20</span><span style="color:#ab7967;">} </span><span style="color:#d08770;">maxLength</span><span>=</span><span style="color:#ab7967;">{</span><span style="color:#d08770;">120</span><span style="color:#ab7967;">} </span><span style="color:#d08770;">required </span><span>/&gt;
+</span><span>  &lt;</span><span style="color:#ebcb8b;">FormHelperText</span><span>&gt;Use 20-120 characters to tell us about yourself&lt;/</span><span style="color:#ebcb8b;">FormHelperText</span><span>&gt;
+</span><span>&lt;/</span><span style="color:#bf616a;">label</span><span>&gt;
+</span></code></pre>
+<p><code>FormHelperText</code> is just a fancy <code>&lt;p&gt;</code> tag. The css we added earlier will hide it when the hint when the input is valid. We also get red
+shadows for invalid inputs that are hidden when the input is focused. You should now see something like this:</p>
+<p><img src="/uncontrolled-forms/valid_selectors.png" alt="css :valid selectors example" /></p>
+<p>Check out the other HTML5 input types that are available <a href="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input">here</a>. You might be surprised
+by what is supported natively.</p>
+<h3 id="more-complex-example">More Complex Example</h3>
+<p>So far we've stuck to validation that is supported directly by the browser. You are likely to come up against requirements for more complex groupings of
+inputs that also require validation. For scenarios like this the <a href="https://developer.mozilla.org/en-US/docs/web/guide/html/constraint_validation#complex_constraints_using_the_constraint_validation_api">constraint validation API</a> is your friend. In this example we're going to use a grouping of checkboxes where at least one of them must be selected to submit the
+form. We'll build this in a separate component, go ahead and create <code>Checkboxes.tsx</code>.</p>
+<pre data-lang="tsx" style="background-color:#2b303b;color:#c0c5ce;" class="language-tsx "><code class="language-tsx" data-lang="tsx"><span style="color:#b48ead;">import </span><span style="color:#bf616a;">React</span><span>, { </span><span style="color:#bf616a;">useRef </span><span>} </span><span style="color:#b48ead;">from </span><span>&quot;</span><span style="color:#a3be8c;">react</span><span>&quot;;
+</span><span>
+</span><span style="color:#b48ead;">interface </span><span>Option {
+</span><span>  </span><span style="color:#bf616a;">name</span><span>: string;
+</span><span>  </span><span style="color:#bf616a;">label</span><span>: string;
+</span><span>}
+</span><span>
+</span><span style="color:#65737e;">// An interface for our props
+</span><span style="color:#b48ead;">interface </span><span>CheckboxesProps {
+</span><span>  </span><span style="color:#bf616a;">options</span><span>: Option[];
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">export const </span><span style="color:#8fa1b3;">Checkboxes</span><span>: React.VFC&lt;CheckboxesProps&gt; = ({ </span><span style="color:#bf616a;">options </span><span>}) </span><span style="color:#b48ead;">=&gt; </span><span>{
+</span><span>  </span><span style="color:#65737e;">// Store a ref to a container element to make it easy to select the checkboxes
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">parentEl </span><span>= </span><span style="color:#8fa1b3;">useRef</span><span>&lt;HTMLFieldSetElement&gt;(</span><span style="color:#d08770;">null</span><span>);
+</span><span>
+</span><span>  </span><span style="color:#65737e;">// Use that ref to grab all the checkboxes.
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#8fa1b3;">checkboxes </span><span>= () </span><span style="color:#b48ead;">=&gt; </span><span>(</span><span style="color:#bf616a;">parentEl</span><span>.current?.</span><span style="color:#96b5b4;">querySelectorAll</span><span>(&#39;</span><span style="color:#a3be8c;">input[type=&quot;checkbox&quot;]</span><span>&#39;) ?? []) </span><span style="color:#b48ead;">as </span><span>NodeListOf&lt;HTMLInputElement&gt;;
+</span><span>
+</span><span>  </span><span style="color:#65737e;">// setCustomValidity with a non-empty string marks the element as invalid. The message will be shown if you try to submit the form
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#8fa1b3;">setAllInvalid </span><span>= (</span><span style="color:#bf616a;">nodes</span><span>: NodeListOf&lt;HTMLInputElement&gt;) </span><span style="color:#b48ead;">=&gt; </span><span>{
+</span><span>    </span><span style="color:#bf616a;">nodes</span><span>.</span><span style="color:#96b5b4;">forEach</span><span>(</span><span style="color:#bf616a;">checkbox </span><span style="color:#b48ead;">=&gt; </span><span style="color:#bf616a;">checkbox</span><span>.</span><span style="color:#96b5b4;">setCustomValidity</span><span>(&quot;</span><span style="color:#a3be8c;">You must select at least one option</span><span>&quot;));
+</span><span>  }
+</span><span>  </span><span style="color:#65737e;">// setCustomValidity with an empty string marks the element as valid
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#8fa1b3;">setAllValid </span><span>= (</span><span style="color:#bf616a;">nodes</span><span>: NodeListOf&lt;HTMLInputElement&gt;) </span><span style="color:#b48ead;">=&gt; </span><span>{
+</span><span>    </span><span style="color:#bf616a;">nodes</span><span>.</span><span style="color:#96b5b4;">forEach</span><span>(</span><span style="color:#bf616a;">checkbox </span><span style="color:#b48ead;">=&gt; </span><span style="color:#bf616a;">checkbox</span><span>.</span><span style="color:#96b5b4;">setCustomValidity</span><span>(&quot;&quot;));
+</span><span>  }
+</span><span>
+</span><span>  </span><span style="color:#65737e;">// When any checkbox changes, see if any are checked and set the validity
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#8fa1b3;">handleChange </span><span>= () </span><span style="color:#b48ead;">=&gt; </span><span>{
+</span><span>    </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">anyChecked </span><span>= </span><span style="color:#d08770;">false</span><span>;
+</span><span>    </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">boxes </span><span>= </span><span style="color:#8fa1b3;">checkboxes</span><span>();
+</span><span>    </span><span style="color:#bf616a;">boxes</span><span>.</span><span style="color:#96b5b4;">forEach</span><span>(</span><span style="color:#bf616a;">checkbox </span><span style="color:#b48ead;">=&gt; </span><span style="color:#bf616a;">anyChecked </span><span>= </span><span style="color:#bf616a;">anyChecked </span><span>|| </span><span style="color:#bf616a;">checkbox</span><span>.checked);
+</span><span>    </span><span style="color:#bf616a;">anyChecked </span><span>? </span><span style="color:#8fa1b3;">setAllValid</span><span>(</span><span style="color:#bf616a;">boxes</span><span>) : </span><span style="color:#8fa1b3;">setAllInvalid</span><span>(</span><span style="color:#bf616a;">boxes</span><span>);
+</span><span>  }
+</span><span>
+</span><span>  </span><span style="color:#65737e;">// Mark the inputs as invalid when the form initially renders.
+</span><span>  </span><span style="color:#65737e;">// Without this you would have to check and uncheck a box for the validation
+</span><span>  </span><span style="color:#65737e;">// to take effect.
+</span><span>  </span><span style="color:#8fa1b3;">useEffect</span><span>(() </span><span style="color:#b48ead;">=&gt; </span><span>{
+</span><span>    </span><span style="color:#8fa1b3;">setAllInvalid</span><span>(</span><span style="color:#8fa1b3;">checkboxes</span><span>())
+</span><span>  }, [])
+</span><span>
+</span><span>  </span><span style="color:#b48ead;">return </span><span>(
+</span><span>    &lt;</span><span style="color:#bf616a;">fieldset </span><span style="color:#d08770;">ref</span><span>=</span><span style="color:#ab7967;">{</span><span style="color:#bf616a;">parentEl</span><span style="color:#ab7967;">}</span><span>&gt;
+</span><span>      &lt;</span><span style="color:#bf616a;">legend</span><span>&gt;Select at least one&lt;/</span><span style="color:#bf616a;">legend</span><span>&gt;
+</span><span>      </span><span style="color:#ab7967;">{</span><span style="color:#bf616a;">options</span><span>.</span><span style="color:#8fa1b3;">map</span><span>((</span><span style="color:#bf616a;">opt</span><span>) </span><span style="color:#b48ead;">=&gt; </span><span>(
+</span><span>        &lt;</span><span style="color:#bf616a;">label </span><span style="color:#d08770;">key</span><span>=</span><span style="color:#ab7967;">{</span><span style="color:#bf616a;">opt</span><span>.name</span><span style="color:#ab7967;">}</span><span>&gt;
+</span><span>          &lt;</span><span style="color:#bf616a;">span</span><span>&gt;</span><span style="color:#ab7967;">{</span><span style="color:#bf616a;">opt</span><span>.label</span><span style="color:#ab7967;">}</span><span>&lt;/</span><span style="color:#bf616a;">span</span><span>&gt;
+</span><span>          &lt;</span><span style="color:#bf616a;">input </span><span style="color:#d08770;">type</span><span>=&quot;</span><span style="color:#a3be8c;">checkbox</span><span>&quot; </span><span style="color:#d08770;">name</span><span>=</span><span style="color:#ab7967;">{</span><span style="color:#bf616a;">opt</span><span>.name</span><span style="color:#ab7967;">} </span><span style="color:#d08770;">onChange</span><span>=</span><span style="color:#ab7967;">{</span><span style="color:#bf616a;">handleChange</span><span style="color:#ab7967;">}</span><span>/&gt;
+</span><span>        &lt;/</span><span style="color:#bf616a;">label</span><span>&gt;
+</span><span>      ))</span><span style="color:#ab7967;">}
+</span><span>    &lt;/</span><span style="color:#bf616a;">fieldset</span><span>&gt;
+</span><span>  );
+</span><span>};
+</span></code></pre>
+<p>If you're looking at this and thinking this should be a <code>&lt;select multiple required&gt;...&lt;/select&gt;</code> you're probably right. Ignore that feeling. Let's
+bring this beast into our form. Import it:</p>
+<pre data-lang="tsx" style="background-color:#2b303b;color:#c0c5ce;" class="language-tsx "><code class="language-tsx" data-lang="tsx"><span style="color:#b48ead;">import </span><span>{ </span><span style="color:#bf616a;">Checkboxes </span><span>} </span><span style="color:#b48ead;">from </span><span>&quot;</span><span style="color:#a3be8c;">./Checkboxes</span><span>&quot;;
+</span></code></pre>
+<p>Define some options:</p>
+<pre data-lang="tsx" style="background-color:#2b303b;color:#c0c5ce;" class="language-tsx "><code class="language-tsx" data-lang="tsx"><span style="color:#b48ead;">const </span><span style="color:#bf616a;">checkboxOptions </span><span>= [
+</span><span>  {
+</span><span>    label: &quot;</span><span style="color:#a3be8c;">I consent to receiving marketing communications</span><span>&quot;,
+</span><span>    name: &quot;</span><span style="color:#a3be8c;">consents</span><span>&quot;,
+</span><span>  },
+</span><span>  {
+</span><span>    label: &quot;</span><span style="color:#a3be8c;">I do not consent to opting out of marketing communications</span><span>&quot;,
+</span><span>    name: &quot;</span><span style="color:#a3be8c;">stillConsents</span><span>&quot;,
+</span><span>  },
+</span><span>];
+</span></code></pre>
+<p>Stick it in the form:</p>
+<pre data-lang="tsx" style="background-color:#2b303b;color:#c0c5ce;" class="language-tsx "><code class="language-tsx" data-lang="tsx"><span>&lt;</span><span style="color:#ebcb8b;">Checkboxes </span><span style="color:#d08770;">options</span><span>=</span><span style="color:#ab7967;">{</span><span style="color:#bf616a;">checkboxOptions</span><span style="color:#ab7967;">} </span><span>/&gt;
+</span></code></pre>
+<p>I removed the other <code>required</code> attributes and the <code>textarea</code> for this example, but you should now see something like this:</p>
+<p><img src="/uncontrolled-forms/checkbox_group.png" alt="required checkbox group" /></p>
+<p>If you check one of the boxes the form will be valid and you can submit. If you try to submit with nothing checked you should
+see a dialog like before with the &quot;You must select at least one option&quot; message over your checkboxes. You might also have noticed
+that the <code>fieldset</code> has a red box shadow around it. <code>Form</code> and <code>Fieldset</code> tags can also be invalid. If you wanted to eliminate this
+you could make those <code>*:invalid</code> selectors more specifc but I was being lazy and just wanted to highlight everything. You can leverage
+this to display additional hints around the form or field sets that are invalid if you want to give broader hints or feedback to your users.</p>
+<h4 id="alternative-implementations">Alternative Implementations</h4>
+<p>You might end up having to use an input control from a third party library that <em>has</em> to be used in a controlled fashion. It might send asynchronous
+requests or just not be designed with regular forms in mind. If something like this comes up, you can abstract this control away by making it a separate component
+and using a <code>&lt;input type=&quot;hidden&quot; name=&quot;whatever&quot; /&gt;</code> to store the actual value. This separate component can be a normal controlled React component but the form doesn't need
+to know that. As long as the hidden input has the expected name when the user clicks submit that data will be available.</p>
+<p>Another alternative is to just make those elements controlled directly in your form component and inject the data into the <code>FormData</code> object in your <code>onSubmit</code> handler. If you
+have a big form this can still save you a lot of work.</p>
+
+    </div>
+</article>
+
+        </main>
+        
+        <footer>
+            
+            <div class="border"></div>
+            <div class="footer">
+                <small class="footer-left">
+                    Copyright &copy; Michael
+                </small>
+                <small class="footer-right">
+                    Powered by <a href="https://www.getzola.org">Zola</a> | Theme <a href="https://github.com/barlog-m/oceanic-zen">Oceanic Zen</a>
+                </small>
+            </div>
+        
+        </footer>
+    
+        </div>
+    </body>
+</html>
