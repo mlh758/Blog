@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        
+
+        <title></title>
+
+        
+            <link rel="stylesheet" href="https://webshittery.com/theme.css">
+        
+        
+    </head>
+    <body>
+        <div class="content">
+        
+        
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;webshittery.com" class="logo"></a>
+                </div>
+                <div class="header-right">
+                    <nav itemscope itemtype="http://schema.org/SiteNavigationElement">
+                      <ul>
+                        
+                        
+                            
+                            <li class="nav">
+                                <a itemprop="url" href="https://webshittery.com/blog/">
+                                    <span itemprop="name">Blog</span>
+                                </a>
+                            </li>
+                        
+                        
+                        <li class="nav">
+                            <a itemprop="url" href="https://github.com/mlh758">
+                                <img class="icon" src="https:&#x2F;&#x2F;webshittery.com/icons/github.svg" alt="Github">
+                            </a>
+                        </li>
+                        
+                        
+                      </ul>
+                    </nav>
+                </div>
+            </header>
+        
+        
+        <main>
+            
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div itemprop="headline">
+        <h1>Cancellation should be more common</h1>
+        <div class="border"></div>
+        <time datetime="2024-09-05" class="date" itemprop="datePublished">
+            05 Sep 2024
+        </time>
+    </div>
+    <div itemprop="articleBody">
+        <h2 id="why-do-i-care-about-cancellation">Why do I care about cancellation?</h2>
+<p>A lot of systems end up relying on asynchronous IO for at least <em>some</em> of their work. I mostly deal with web servers so that means talking to caches, databases, and other services. Most clients for these resources provide timeout configurations. However, multiple steps of the operation could be misbehaving at once, or multiple async operations within the request could be degraded. To protect throughput, you likely want to set an overall timeout on your request handlers that depends on the expected runtime for those endpoints.</p>
+<p>It is common in my experience to want to abort and clean up other operations that are still pending if one fails. For programs using <code>async/await</code> style idioms, coroutines, actors, or any <a href="https://en.wikipedia.org/wiki/Cooperative_multitasking">cooperative multitasking</a> mechanism, you'll likely need to signal failure to other processes and expect them to handle it.</p>
+<p>My current employer also makes use of AWS Lambda which enforces an overall runtime duration on the serverless function. We're using Node.js for the Lambda functions. When your time runs out, execution is simply stopped. Sometimes that Lambda instance is reused to serve other requests and you get oddities like database connections immediately timing out and <a href="https://stackoverflow.com/questions/73285786/aws-lambda-node-js-finally-block-behaviour">finally blocks from previous runs</a> executing. Metrics and traces can also get skewed in strange ways or lost entirely when this happens. Node has <a href="https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal">AbortSignal</a> which functions as a cancellation token, but it's rare to see it accepted in the APIs of concurrent code outside of <code>fetch</code>. The Lambda context provides a function to get the remaining runtime, but to make use of that you need to pass it down to every async function you call and make a decision based on the remaining time.</p>
+<p>Languages that provide concurrency primitives yet do not have an ecosystem that supports cooperative cancellation are shifting a lot of complexity onto you as a developer.</p>
+<h2 id="some-examples">Some examples</h2>
+<p>The following sections are how a few different ecosystems handle cancellation. In all of them I'm just going to execute a single SQL query that sleeps for a specified amount of time. This is obviously a little contrived, you could just set a timeout on your SQL driver to protect against this trivial case.</p>
+<p>I'm doing this for simplicity. A single request is probably going to interact with several async tasks throughout its lifecycle and you should strive to limit the overall duration.</p>
+<h2 id="cancellation-in-ruby-on-rails">Cancellation in Ruby on Rails</h2>
+<p>Ruby has a global interpreter lock so while you may have multiple threads running to handle requests, only one of them can be live at any given time. This isn't necessarily a problem since a lot of what happens in an application is IO activity which means the other threads can wake up and handle things while that operation is pending.</p>
+<p>Most web servers for Ruby on Rails, like Puma, let you configure a count of threads and workers. Workers will fork the process and give you full parallelism on a single node. Even still, it is critical that requests complete in a timely manner to keep the application responsive. I've had a single slow endpoint take down an entire application with around 60 pods, 3 workers per pod. It was only accessible to a small subset of users, but they were getting frustrated and reloading the page which added to the pile of requests rapidly. We quickly shipped a &quot;fix&quot; to break the endpoint to salvage the rest of the application while we worked on fixing the performance.</p>
+<p>There isn't an idiom of using cancellation tokens in Ruby, therefore ensuring your overall request duration stays within certain boundaries is tricky. <em>Most</em> libraries that perform IO give you configurable timeouts you can set. This helps prevent any one step of the request from exceeding a timeout but you don't have many options for end to end timeouts.</p>
+<p>Enter the <a href="https://ruby-doc.org/stdlib-3.0.1/libdoc/timeout/rdoc/Timeout.html">Timeout</a> module from the standard library. You might use it like this:</p>
+<pre data-lang="rb" style="background-color:#2b303b;color:#c0c5ce;" class="language-rb "><code class="language-rb" data-lang="rb"><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">index
+</span><span>  </span><span style="color:#ebcb8b;">Timeout</span><span>.timeout(</span><span style="color:#d08770;">2</span><span>) </span><span style="color:#b48ead;">do
+</span><span>    seconds = params.</span><span style="color:#8fa1b3;">require(</span><span style="color:#a3be8c;">:seconds</span><span style="color:#8fa1b3;">).</span><span style="color:#96b5b4;">to_i
+</span><span>    </span><span style="color:#ebcb8b;">ActiveRecord</span><span>::</span><span style="color:#ebcb8b;">Base</span><span>.connection.exec_query(&quot;</span><span style="color:#a3be8c;">SELECT pg_sleep($1)</span><span>&quot;, &quot;</span><span style="color:#a3be8c;">SQL</span><span>&quot;, [seconds])
+</span><span>    render </span><span style="color:#a3be8c;">plain: </span><span>&quot;</span><span style="color:#a3be8c;">Hello, world!</span><span>&quot;
+</span><span>  </span><span style="color:#b48ead;">end
+</span><span style="color:#b48ead;">end
+</span></code></pre>
+<p>Let's start running through some tests with a well behaved client.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>fetch(&#39;http://localhost:3000/timeouts?seconds=3&#39;);
+</span><span>
+</span><span>Completed 500 Internal Server Error in 2002ms (ActiveRecord: 2001.1ms | Allocations: 1355)
+</span><span>Timeout::Error (execution expired):
+</span></code></pre>
+<p>This appears to give us the desired behavior. Whatever happens inside the <code>Timeout</code> block won't exceed the boundary we've set.</p>
+<p>How about when the well behaved client gives up:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>fetch(&#39;http://localhost:3000/timeouts?seconds=3&#39;, { signal: AbortSignal.timeout(500) })
+</span><span>
+</span><span>Completed 500 Internal Server Error in 2002ms (ActiveRecord: 2000.6ms | Allocations: 1355)
+</span><span>Timeout::Error (execution expired)
+</span></code></pre>
+<p>There isn't any mechanism to detect this so the request runs the full duration regardless of whether the client has told us to give up or not. We'll just run to the server's timeout and give up. This means the resources consumed by that abandoned request can't be released for other requests. At least that <code>Timeout</code> block is preventing it from running forever and protecting the server. Or is it?</p>
+<h3 id="ruby-timeout-is-dangerous">Ruby Timeout is dangerous</h3>
+<p>The internet doesn't need another &quot;Ruby's timeout is dangerous&quot; blog post so I'll just give you a quick summary and point to better writers in the past. Ruby's Timeout is implemented by starting another thread to run a timer and then raising an exception in the original thread if that timer expires. This can end up terminating that block <em>anywhere</em> in a very unsafe way.</p>
+<p>You can find fallout of this in GitHub issues all over the internet. Here's one for <a href="https://github.com/zombocom/rack-timeout/issues/39">rack-timeout</a>. Here's <a href="https://github.com/zombocom/rack-timeout/issues/49">another one</a>.</p>
+<p>The fallout spreads to Rails itself where it had <a href="https://github.com/rails/rails/pull/29333">surprising effects in transactions</a>. Trying to fix this lead to a breaking change in Rails 7 where <a href="https://github.com/rails/rails/issues/45017">early returns in transactions now lead to rollbacks</a>. I had assumed most Ruby devs already knew the risks of <code>Timeout</code> but the ongoing issues surrounding it tells me this isn't the case. Cancellation is a common need to protect your server and <code>Timeout</code> probably looks like an obvious choice.</p>
+<p>More details on <code>Timeout</code>:</p>
+<ul>
+<li><a href="https://jvns.ca/blog/2015/11/27/why-rubys-timeout-is-dangerous-and-thread-dot-raise-is-terrifying/">Julia Evans</a></li>
+<li><a href="https://www.mikeperham.com/2015/05/08/timeout-rubys-most-dangerous-api/">Mike Perham</a></li>
+<li><a href="https://github.com/ruby/timeout/pull/30">Changes to Timeout itself</a>. I found this especially interesting since it illustrates how language features like <code>next</code> that I only think of as iteration primitives are valid in <em>any</em> block context and cause difficulties for libraries.</li>
+</ul>
+<p>In short, you probably shouldn't be using <code>Timeout</code>.</p>
+<h3 id="safer-timeouts">Safer timeouts?</h3>
+<p>I mentioned <a href="https://github.com/zombocom/rack-timeout">Rack Timeout</a> above and it's important again in this section. They have a configuration option <a href="https://github.com/zombocom/rack-timeout/blob/main/doc/settings.md#term-on-timeout">term_on_timeout</a> which will send a <code>SIGTERM</code> the the process serving requests. Web servers like Puma know to then restart that worker automatically. This avoids the sort of socket corruption, connection pool loss, and other issues described in the posts and GitHub issues above. However it also means when a request times out on your server you lose a worker and all the threads it had for handling requests until a new one can be booted. On Kubernetes this often also means that pods stop responding to health checks in a timeely manner and you start losing pods which can quickly cascade into down time.</p>
+<p>Another disadvantage to the <code>SIGTERM</code> option is that not all monitoring tools seem to handle it well. You may end up losing traces and metrics from the requests that you most need to inspect.</p>
+<h2 id="cancellation-in-node-js">Cancellation in Node.js</h2>
+<p>This post is going to be long, and I want to show some positive examples so I'll keep this section short. <code>AbortController</code> and <code>AbortSignal</code> exist in Node but there isn't currently a lot of ecosystem support for passing them around and having async tasks clean up in reponse to them. I hope this improves.</p>
+<p>Node's common HTTP servers support specifying timeouts that keep the server <em>responsive</em> but because there's no way to signal cleanup you end up leaking asynchronous tasks. It will be a race to see if you run out of memory or database connections first. In the case of a runtime like Lambda you end up with bizarre errors on the next invocation. In both cases you're probably going to have some corrupted state in your system at some point as a result of this.</p>
+<p>Here's a <a href="https://betterstack.com/community/guides/scaling-nodejs/nodejs-timeouts/">good post</a> that goes into more detail on how to set up timeouts and the limitations.</p>
+<h2 id="trying-it-in-elixir-phoenix">Trying it in Elixir/Phoenix</h2>
+<p>Erlang's actor model of concurrency was built with long lived asynchronous systems in mind from the start. Tasks are spawned under a <a href="https://www.erlang.org/doc/system/sup_princ.html">supervision tree</a> attached to a <a href="https://www.erlang.org/docs/23/reference_manual/processes">process</a>. Much like OS processes, they can respond to signals from the rest of the system. <a href="https://www.phoenixframework.org/">Phoenix</a> is a popular web framework built on top of Elixir which is implemented in Erlang. Let's take a look at how this might handle cancellation.</p>
+<pre data-lang="elixir" style="background-color:#2b303b;color:#c0c5ce;" class="language-elixir "><code class="language-elixir" data-lang="elixir"><span style="color:#b48ead;">defmodule </span><span style="color:#ebcb8b;">TimeoutsWeb</span><span>.</span><span style="color:#ebcb8b;">TimeoutController </span><span style="color:#b48ead;">do
+</span><span>  </span><span style="color:#b48ead;">use </span><span style="color:#ebcb8b;">TimeoutsWeb</span><span>, </span><span style="color:#a3be8c;">:controller
+</span><span>  </span><span style="color:#b48ead;">alias </span><span style="color:#ebcb8b;">Ecto</span><span>.</span><span style="color:#ebcb8b;">Adapters</span><span>.</span><span style="color:#ebcb8b;">SQL
+</span><span>
+</span><span>  </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">index</span><span>(conn, %{&quot;</span><span style="color:#a3be8c;">seconds</span><span>&quot; =&gt; seconds}) </span><span style="color:#b48ead;">do
+</span><span>    seconds = </span><span style="color:#ebcb8b;">String</span><span>.to_integer(seconds)
+</span><span>    query = &quot;</span><span style="color:#a3be8c;">SELECT pg_sleep($1)</span><span>&quot;
+</span><span>    params = [seconds]
+</span><span>    t = </span><span style="color:#ebcb8b;">Task</span><span>.async(</span><span style="color:#b48ead;">fn </span><span>-&gt;
+</span><span>      </span><span style="color:#ebcb8b;">SQL</span><span>.query(</span><span style="color:#ebcb8b;">Timeouts</span><span>.</span><span style="color:#ebcb8b;">Repo</span><span>, query, params)
+</span><span>    </span><span style="color:#b48ead;">end</span><span>)
+</span><span>    </span><span style="color:#b48ead;">case </span><span style="color:#ebcb8b;">Task</span><span>.yield(t, </span><span style="color:#d08770;">2_000</span><span>) </span><span style="color:#b48ead;">do
+</span><span>      {</span><span style="color:#a3be8c;">:ok</span><span>, {</span><span style="color:#a3be8c;">:ok</span><span>, _result}} -&gt;
+</span><span>        send_resp(conn, </span><span style="color:#d08770;">200</span><span>, &quot;</span><span style="color:#a3be8c;">Slept for #{</span><span>seconds}</span><span style="color:#a3be8c;"> seconds</span><span>&quot;)
+</span><span>      {</span><span style="color:#a3be8c;">:ok</span><span>, {</span><span style="color:#a3be8c;">:error</span><span>, _reason}} -&gt;
+</span><span>        send_resp(conn, </span><span style="color:#d08770;">500</span><span>, &quot;</span><span style="color:#a3be8c;">Failed to execute sleep query</span><span>&quot;)
+</span><span>      </span><span style="color:#d08770;">nil </span><span>-&gt;
+</span><span>        send_resp(conn, </span><span style="color:#d08770;">503</span><span>, &quot;</span><span style="color:#a3be8c;">Failed to complete in time</span><span>&quot;)
+</span><span>    </span><span style="color:#b48ead;">end
+</span><span>  </span><span style="color:#b48ead;">end
+</span><span style="color:#b48ead;">end
+</span></code></pre>
+<p>This spawns a <a href="https://hexdocs.pm/elixir/1.12/Task.html">Task</a>, which is just an Erlang process, from the current process. Similar to Node's <code>Promise.race</code> we're able to inspect if the task succeeded, failed, or timed out. In Erlang's case however, the task automatically receives an <a href="https://www.erlang.org/doc/system/ref_man_processes.html#sending-signals">exit signal</a> from the Erlang runtime and has the opportunity to stop and clean up what it was doing. Let's test this out.</p>
+<p>Calling it with a 1 second sleep:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>[info] GET /timeout
+</span><span>[debug] Processing with TimeoutsWeb.TimeoutController.index/2
+</span><span>  Parameters: %{&quot;seconds&quot; =&gt; &quot;1&quot;}
+</span><span>  Pipelines: []
+</span><span>[debug] QUERY OK db=1002.0ms queue=0.2ms idle=1693.2ms
+</span><span>SELECT pg_sleep($1) [1]
+</span><span>[info] Sent 200 in 1002ms
+</span></code></pre>
+<p>Calling it with a 3 second sleep:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>[info] Sent 503 in 2001ms
+</span><span>[info] Postgrex.Protocol (#PID&lt;0.333.0&gt;) disconnected: ** (DBConnection.ConnectionError) client #PID&lt;0.795.0&gt; exited
+</span></code></pre>
+<p>The SQL query that was running was immediately disconnected, cleaning up any ongoing work. A nice feature of the Elixir example is that it doesn't require any of the intermediate functions involved to accept a cancellation token. So long as the low level functionality like the database connection pool or http clients that have been invoked properly handle <code>exit</code>, resources will be freed when the process spawned by <code>Task.async</code> is aborted by <code>yield</code>.</p>
+<p>If I make a request with a well behaved client that aborts the request however, such as with <code>fetch('http://localhost:4000/timeout?seconds=4', { signal: AbortSignal.timeout(500)})</code> the server still processes the request up until its own timeout at 2 seconds and attempts to return a 503. This is unfortunate, it would be nice to be able to release those resources sooner.</p>
+<h2 id="cancellation-in-c-net">Cancellation in C#/.NET</h2>
+<p>This is a controller method from a .NET app written with C# 8. In .NET land it's common for async operations to provide a function overload that accepts a <code>CancellationToken</code>. Controller methods provide one that is already bound to the request lifecycle and you can link from that to add a timeout.</p>
+<pre data-lang="c#" style="background-color:#2b303b;color:#c0c5ce;" class="language-c# "><code class="language-c#" data-lang="c#"><span>[</span><span style="color:#bf616a;">HttpGet</span><span>]
+</span><span style="color:#b48ead;">public async </span><span>Task&lt;</span><span style="color:#b48ead;">string</span><span>&gt; </span><span style="color:#8fa1b3;">Timeout</span><span>(CancellationToken </span><span style="color:#bf616a;">abort</span><span>, </span><span style="color:#b48ead;">int </span><span style="color:#bf616a;">seconds</span><span>)
+</span><span>{
+</span><span>    </span><span style="color:#b48ead;">var </span><span style="color:#bf616a;">tokenSource </span><span>= </span><span style="color:#bf616a;">CancellationTokenSource</span><span>.</span><span style="color:#bf616a;">CreateLinkedTokenSource</span><span>(</span><span style="color:#bf616a;">abort</span><span>);
+</span><span>    </span><span style="color:#b48ead;">var </span><span style="color:#bf616a;">duration </span><span>= new SqlParameter(&quot;</span><span style="color:#a3be8c;">duration</span><span>&quot;, $&quot;</span><span style="color:#a3be8c;">00:00:</span><span>{</span><span style="color:#bf616a;">seconds</span><span style="color:#d08770;">:00</span><span>}&quot;);
+</span><span>    </span><span style="color:#bf616a;">tokenSource</span><span>.</span><span style="color:#bf616a;">CancelAfter</span><span>(</span><span style="color:#d08770;">2000</span><span>);  
+</span><span>    </span><span style="color:#b48ead;">await </span><span style="color:#bf616a;">_context</span><span>.</span><span style="color:#bf616a;">Users</span><span>.</span><span style="color:#bf616a;">FromSqlRaw</span><span>($&quot;</span><span style="color:#a3be8c;">WAITFOR DELAY @duration;select * from AspNetUsers</span><span>&quot;, </span><span style="color:#bf616a;">duration</span><span>).</span><span style="color:#bf616a;">ToListAsync</span><span>(</span><span style="color:#bf616a;">tokenSource</span><span>.</span><span style="color:#bf616a;">Token</span><span>);
+</span><span>    </span><span style="color:#b48ead;">return </span><span>&quot;</span><span style="color:#a3be8c;">Done</span><span>&quot;;
+</span><span>}
+</span></code></pre>
+<p>Let's send a slow request: <code>fetch('https://localhost:7117/api/registration?seconds=3'</code>. In this case the error is <code>SqlException: A severe error occurred on the current command. The results, if any, should be discarded. Operation cancelled by user.</code>. The query is immediately stopped and you are given the opportunity to handle it. Resources are released and any tasks handed a token from our source have the opportunity to clean up.</p>
+<p>If you have a well behaved client that aborts, such as <code>fetch('https://localhost:7117/api/registration?seconds=2', { signal: AbortSignal.timeout(100)}) </code> the controller actions is immediately aborted with an exception <code>System.Threading.Tasks.TaskCanceledException: A task was canceled.</code>. This also cleans up the query. This functionality would have saved our application in the scenario I mentioned above. If the user refreshes the page, the old request is aborted and the resources freed. Those users would have still been annoyed that part of the application wasn't responsive, but there weren't enough of them to cause a full outage.</p>
+<h2 id="trying-it-in-go">Trying it in Go</h2>
+<p>Here's an HTTP handler written in Go that grabs the seconds parameter from the URL, converts it to an integer, and hands it off to a query. I just used standard library code for this aside from installing a pg driver for SQL. You could skip the explicit timeout by using something like <code>TimeoutHandler</code> to wrap the function.</p>
+<pre data-lang="go" style="background-color:#2b303b;color:#c0c5ce;" class="language-go "><code class="language-go" data-lang="go"><span style="color:#bf616a;">http</span><span>.</span><span style="color:#bf616a;">HandleFunc</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;, </span><span style="color:#b48ead;">func</span><span>(</span><span style="color:#bf616a;">w http</span><span>.</span><span style="color:#b48ead;">ResponseWriter</span><span>, </span><span style="color:#bf616a;">r </span><span>*</span><span style="color:#bf616a;">http</span><span>.</span><span style="color:#b48ead;">Request</span><span>) {
+</span><span>	</span><span style="color:#bf616a;">secondsStr </span><span>:= </span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">URL</span><span>.</span><span style="color:#bf616a;">Query</span><span>().</span><span style="color:#bf616a;">Get</span><span>(&quot;</span><span style="color:#a3be8c;">seconds</span><span>&quot;)
+</span><span>	</span><span style="color:#bf616a;">seconds</span><span>, </span><span style="color:#bf616a;">err </span><span>:= </span><span style="color:#bf616a;">strconv</span><span>.</span><span style="color:#bf616a;">Atoi</span><span>(</span><span style="color:#bf616a;">secondsStr</span><span>)
+</span><span>	</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#d08770;">nil </span><span>{
+</span><span>		</span><span style="color:#bf616a;">log</span><span>.</span><span style="color:#bf616a;">Printf</span><span>(&quot;</span><span style="color:#a3be8c;">Error parsing seconds: </span><span style="color:#d08770;">%q</span><span>&quot;, </span><span style="color:#bf616a;">err</span><span>)
+</span><span>		</span><span style="color:#bf616a;">w</span><span>.</span><span style="color:#bf616a;">WriteHeader</span><span>(</span><span style="color:#bf616a;">http</span><span>.</span><span style="color:#bf616a;">StatusBadRequest</span><span>)
+</span><span>		</span><span style="color:#bf616a;">fmt</span><span>.</span><span style="color:#bf616a;">Fprint</span><span>(</span><span style="color:#bf616a;">w</span><span>, &quot;</span><span style="color:#a3be8c;">Invalid seconds</span><span>&quot;)
+</span><span>		</span><span style="color:#b48ead;">return
+</span><span>	}
+</span><span>	</span><span style="color:#bf616a;">ctx</span><span>, </span><span style="color:#bf616a;">cancel </span><span>:= </span><span style="color:#bf616a;">context</span><span>.</span><span style="color:#bf616a;">WithTimeout</span><span>(</span><span style="color:#bf616a;">r</span><span>.</span><span style="color:#bf616a;">Context</span><span>(), </span><span style="color:#bf616a;">time</span><span>.</span><span style="color:#bf616a;">Duration</span><span>(</span><span style="color:#d08770;">2</span><span>*</span><span style="color:#bf616a;">time</span><span>.</span><span style="color:#bf616a;">Second</span><span>))
+</span><span>	</span><span style="color:#b48ead;">defer </span><span style="color:#bf616a;">cancel</span><span>()
+</span><span>	</span><span style="color:#bf616a;">_</span><span>, </span><span style="color:#bf616a;">err </span><span>= </span><span style="color:#bf616a;">db</span><span>.</span><span style="color:#bf616a;">QueryContext</span><span>(</span><span style="color:#bf616a;">ctx</span><span>, &quot;</span><span style="color:#a3be8c;">SELECT pg_sleep($1)</span><span>&quot;, </span><span style="color:#bf616a;">seconds</span><span>)
+</span><span>	</span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">err </span><span>!= </span><span style="color:#d08770;">nil </span><span>{
+</span><span>		</span><span style="color:#bf616a;">log</span><span>.</span><span style="color:#bf616a;">Printf</span><span>(&quot;</span><span style="color:#a3be8c;">Error querying database: </span><span style="color:#d08770;">%q</span><span>&quot;, </span><span style="color:#bf616a;">err</span><span>)
+</span><span>		</span><span style="color:#bf616a;">w</span><span>.</span><span style="color:#bf616a;">WriteHeader</span><span>(</span><span style="color:#bf616a;">http</span><span>.</span><span style="color:#bf616a;">StatusServiceUnavailable</span><span>)
+</span><span>		</span><span style="color:#bf616a;">fmt</span><span>.</span><span style="color:#bf616a;">Fprint</span><span>(</span><span style="color:#bf616a;">w</span><span>, &quot;</span><span style="color:#a3be8c;">Error querying database</span><span>&quot;)
+</span><span>	} </span><span style="color:#b48ead;">else </span><span>{
+</span><span>		</span><span style="color:#bf616a;">fmt</span><span>.</span><span style="color:#bf616a;">Fprintf</span><span>(</span><span style="color:#bf616a;">w</span><span>, &quot;</span><span style="color:#a3be8c;">Hello World</span><span>&quot;)
+</span><span>	}
+</span><span>})
+</span></code></pre>
+<p>Let's run through the same sort of tests. A fetch with a duration under our timeout comes back just fine:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>fetch(&#39;http://localhost:4000/?seconds=1&#39;)
+</span><span>2024/09/07 11:26:43 Query successful
+</span></code></pre>
+<p>A request that is too slow for our timeout causes the request to abort and the query immediately wraps up.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>fetch(&#39;http://localhost:4000/?seconds=3&#39;)
+</span><span>2024/09/07 11:27:03 Error querying database: &quot;pq: canceling statement due to user request&quot;
+</span></code></pre>
+<p>If we send a slow request with a well behaved client that hangs up before we complete it will also immediately stop the query and free resources. I added a little extra logging on this one to clarify the behavior.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>fetch(&#39;http://localhost:4000/?seconds=3&#39;, { signal: AbortSignal.timeout(1000)})
+</span><span>2024/09/07 11:36:24 Querying database
+</span><span>2024/09/07 11:36:25 Error querying database: &quot;pq: canceling statement due to user request&quot;
+</span><span>2024/09/07 11:36:25 Request complete
+</span></code></pre>
+<p>The context API in Go <a href="https://faiface.github.io/post/context-should-go-away-go2/">isn't without controversy</a>, but considering the alternatives that I'm often faced with I'm pretty happy to have it and see it widely used. Adding support for it <a href="https://github.com/vertica/vertica-sql-go/pull/81">in existing libraries</a> often isn't very painful.</p>
+<h2 id="why-do-i-care-about-well-behaved-clients">Why do I care about well behaved clients?</h2>
+<p>When you're exposed to the internet it's basically guaranteed that many of the clients on your server are going to exhibit bad behavior. They might just abandon the network socket. They could also trickle headers or payload to you in a <a href="https://www.cloudflare.com/en-gb/learning/ddos/ddos-attack-tools/slowloris/">Slowloris</a> attack. Go and C# both detect at least <em>some</em> misbehaving clients and abort the request, but you'll want to make sure you configure your web server defensively.</p>
+<p>I've worked on several applications that provide fairly expensive search functionality to analysts or power users. If they kick off something expensive and then suddenly change their mind it's nice to be able to abort that request in the client and have the server immediately stop and clean up the resources that were in use. In one case my team was allocated a <em>very</em> small connection pool from a Vertica database so cleaning up unwanted searches was critical for keeping any sort of responsiveness.</p>
+<h2 id="wrapping-up">Wrapping up</h2>
+<p>Cancellation is an important part of building reliable systems. Adding timeouts to network requests and database operations only gets you part of the way there. Not having this functionality in the ecosystem you're developing in inevitably pushes a lot of complexity back up to you as a developer and may end up leaving you with no good options. If you're assessing technology for a new project, keep this in mind. If you're a library developer please ensure you're exposing cancellation mechanisms supported in your ecosystem.</p>
+
+    </div>
+</article>
+
+        </main>
+        
+        <footer>
+            
+            <div class="border"></div>
+            <div class="footer">
+                <small class="footer-left">
+                    Copyright &copy; Michael
+                </small>
+                <small class="footer-right">
+                    Powered by <a href="https://www.getzola.org">Zola</a> | Theme <a href="https://github.com/barlog-m/oceanic-zen">Oceanic Zen</a>
+                </small>
+            </div>
+        
+        </footer>
+    
+        </div>
+    </body>
+</html>
