@@ -64,7 +64,7 @@ state between requests. Usually this is an OLTP (online transaction processing) 
 This might be a relational database like PostgreSQL but could just as easily be a
 document oriented database like Mongo. Depending on your use case this initial storage may
 take you pretty far. Databases these days often offer some degree of full text search,
-indexes for optimizing geospacial queries, and pub/sub mechanisms. 
+indexes for optimizing geospacial queries, and pub/sub mechanisms.
 At some point though, it is likely you'll end up with additional data stores.</p>
 <p>Additional data stores can be obvious such as an OLAP (online analytical processing)
 database, Elasticsearch, or caches. They may also be somewhat less obviously databases such as
@@ -72,7 +72,7 @@ database, Elasticsearch, or caches. They may also be somewhat less obviously dat
 or a remote queue system like RabbitMQ or Kafka. I mention this
 other category separately because I've noticed that on many teams there is a lot more
 care taken to ensure writes to something like Elasticsearch are working than with a
-job back end like Sidekiq which &quot;just works&quot;.</p>
+job back end like Sidekiq which "just works".</p>
 <p>This post is going to use the P modeling language to describe a common, but flawed approach
 to managing multiple storage systems as well as a couple of the available alternatives.
 You can find the P source for this on <a href="https://github.com/mlh758/blog_dual_write_spec">GitHub</a>.</p>
@@ -134,27 +134,27 @@ databases recorded the same events in the same order. With P we do that with a l
 using <code>hot</code> and <code>cold</code> states. <code>AllMatch</code> is checking that the events which <em>all</em> databases
 have recorded match. It will consider <code>1, 2, 3</code> and <code>1, 2</code> a match and won't verify the third
 slot until the other database catches up.</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>cold state WaitForEvents {</span><span>
-</span><span>    on eWriteRecorded do (write: tWriteRecorded) {</span><span>
-</span><span>        UpdateDatabase(write);</span><span>
-</span><span>        dbs = values(databaseStates);</span><span>
-</span><span>        if (!SameSize()) {</span><span>
-</span><span>            goto WaitForSequencesToMatch;</span><span>
-</span><span>        }</span><span>
-</span><span>        assert AllMatch(), &quot;Sequences are out of order&quot;;</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>cold state WaitForEvents {
+</span><span>    on eWriteRecorded do (write: tWriteRecorded) {
+</span><span>        UpdateDatabase(write);
+</span><span>        dbs = values(databaseStates);
+</span><span>        if (!SameSize()) {
+</span><span>            goto WaitForSequencesToMatch;
+</span><span>        }
+</span><span>        assert AllMatch(), &quot;Sequences are out of order&quot;;
+</span><span>    }
+</span><span>}
 </span><span>
-</span><span>hot state WaitForSequencesToMatch {</span><span>
-</span><span>    on eWriteRecorded do (write: tWriteRecorded) {</span><span>
-</span><span>        UpdateDatabase(write);</span><span>
-</span><span>        dbs = values(databaseStates);</span><span>
-</span><span>        assert AllMatch(), &quot;Sequences are out of order&quot;;</span><span>
-</span><span>        if (SameSize()) {</span><span>
-</span><span>            goto WaitForEvents;</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+</span><span>hot state WaitForSequencesToMatch {
+</span><span>    on eWriteRecorded do (write: tWriteRecorded) {
+</span><span>        UpdateDatabase(write);
+</span><span>        dbs = values(databaseStates);
+</span><span>        assert AllMatch(), &quot;Sequences are out of order&quot;;
+</span><span>        if (SameSize()) {
+</span><span>            goto WaitForEvents;
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>Databases will announce when they see a value and the spec machine will record that in a
 sequence for each database. We know if the databases have a different number of events they
@@ -164,46 +164,46 @@ and yet the events in each slot don't match we've hit a correctness violation.</
 <h3 id="a-single-database">A Single Database</h3>
 <p>This is just to check that the spec we wrote functions correctly. A single database should always
 be consistent with itself. Here's our first pass at a database:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine Database</span><span>
-</span><span>{</span><span>
-</span><span>    // store our name so the spec machine can track our state correctly</span><span>
-</span><span>    var name: string;</span><span>
-</span><span>    start state Init {</span><span>
-</span><span>        entry (payload: string) {</span><span>
-</span><span>            name = payload;</span><span>
-</span><span>            goto WaitForRequests;</span><span>
-</span><span>        }</span><span>
-</span><span>        defer eWriteReq;</span><span>
-</span><span>    }</span><span>
-</span><span>    // announce the commands we recieve</span><span>
-</span><span>    state WaitForRequests {</span><span>
-</span><span>        on eWriteReq do (val: int) {</span><span>
-</span><span>            announce eWriteRecorded, (name, val);</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine Database
+</span><span>{
+</span><span>    // store our name so the spec machine can track our state correctly
+</span><span>    var name: string;
+</span><span>    start state Init {
+</span><span>        entry (payload: string) {
+</span><span>            name = payload;
+</span><span>            goto WaitForRequests;
+</span><span>        }
+</span><span>        defer eWriteReq;
+</span><span>    }
+</span><span>    // announce the commands we recieve
+</span><span>    state WaitForRequests {
+</span><span>        on eWriteReq do (val: int) {
+</span><span>            announce eWriteRecorded, (name, val);
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>Below is our first test driver. We declare a database, <code>announce</code> an init event
 to start our spec machine, and then fire a few commands at the database.</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine SingleDatabase {</span><span>
-</span><span>    var database: Database;</span><span>
-</span><span>    var iter: int;</span><span>
-</span><span>    var instances: seq[string];</span><span>
-</span><span>    start state Init {</span><span>
-</span><span>        entry {</span><span>
-</span><span>            instances += (0, &quot;Primary&quot;);</span><span>
-</span><span>            announce eMonitor_ConsistencyInit, instances;</span><span>
-</span><span>            database = new Database(instances[0]);</span><span>
-</span><span>            while (iter &lt; 10) {</span><span>
-</span><span>                iter = iter + 1;</span><span>
-</span><span>                send database, eWriteReq, iter;</span><span>
-</span><span>            }</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine SingleDatabase {
+</span><span>    var database: Database;
+</span><span>    var iter: int;
+</span><span>    var instances: seq[string];
+</span><span>    start state Init {
+</span><span>        entry {
+</span><span>            instances += (0, &quot;Primary&quot;);
+</span><span>            announce eMonitor_ConsistencyInit, instances;
+</span><span>            database = new Database(instances[0]);
+</span><span>            while (iter &lt; 10) {
+</span><span>                iter = iter + 1;
+</span><span>                send database, eWriteReq, iter;
+</span><span>            }
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>After running <code>p compile</code> and <code>p check -tc tcSingleDatabase -i 100</code> we should see:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>..... Found 0 bugs.</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>..... Found 0 bugs.
 </span></code></pre>
 <p>Hooray.</p>
 <h3 id="dual-writes-single-server-magic-uptime">Dual Writes, Single Server, Magic Uptime</h3>
@@ -214,40 +214,40 @@ write first to the primary and then to the followers. We initialize each server
 with a non-overlapping sequence of messages just to keep the sequence of integers
 unique. Here is an excerpt of the server machine. I omitted the variable declarations
 and init function since they're boring:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>type tStartServer = (primary: Database, followers: set[Database], startAt: int, messageCount: int);</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>type tStartServer = (primary: Database, followers: set[Database], startAt: int, messageCount: int);
 </span><span>
-</span><span>machine Server {</span><span>
-</span><span>    // for each message in our range, send it to the primary</span><span>
-</span><span>    // and then any followers we&#39;re aware of to simulate dual writes</span><span>
-</span><span>    var follower: Database;</span><span>
-</span><span>    state SendMessages {</span><span>
-</span><span>        entry {</span><span>
-</span><span>            while (counter &lt; messageCount) {</span><span>
-</span><span>                send primary, eWriteReq, startAt + counter;</span><span>
-</span><span>                foreach (follower in followers) {</span><span>
-</span><span>                    send follower, eWriteReq, startAt + counter;</span><span>
-</span><span>                }</span><span>
-</span><span>                counter = counter + 1;</span><span>
-</span><span>            }</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+</span><span>machine Server {
+</span><span>    // for each message in our range, send it to the primary
+</span><span>    // and then any followers we&#39;re aware of to simulate dual writes
+</span><span>    var follower: Database;
+</span><span>    state SendMessages {
+</span><span>        entry {
+</span><span>            while (counter &lt; messageCount) {
+</span><span>                send primary, eWriteReq, startAt + counter;
+</span><span>                foreach (follower in followers) {
+</span><span>                    send follower, eWriteReq, startAt + counter;
+</span><span>                }
+</span><span>                counter = counter + 1;
+</span><span>            }
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>Our test case for this scenario is similarly straightforward. <code>BuildDatabases</code> just turns
 the sequence of names into the <code>(Database, set[Database])</code> tuple we need for initializing
 servers.</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine SingleServerPerfectDualWrites {</span><span>
-</span><span>    // declarations omitted</span><span>
-</span><span>    start state Init {</span><span>
-</span><span>        entry {</span><span>
-</span><span>            instances += (0, &quot;Primary&quot;);</span><span>
-</span><span>            instances += (1, &quot;Secondary&quot;);</span><span>
-</span><span>            announce eMonitor_ConsistencyInit, instances;</span><span>
-</span><span>            dbs = BuildDatabases(instances);</span><span>
-</span><span>            server = new Server((primary = dbs.0, followers = dbs.1, startAt = 0, messageCount = 10));</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine SingleServerPerfectDualWrites {
+</span><span>    // declarations omitted
+</span><span>    start state Init {
+</span><span>        entry {
+</span><span>            instances += (0, &quot;Primary&quot;);
+</span><span>            instances += (1, &quot;Secondary&quot;);
+</span><span>            announce eMonitor_ConsistencyInit, instances;
+</span><span>            dbs = BuildDatabases(instances);
+</span><span>            server = new Server((primary = dbs.0, followers = dbs.1, startAt = 0, messageCount = 10));
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>Running <code>p check -tc tcPerfectDualWrites -i 100</code> provides another <code>.... Found 0 bugs.</code>. This makes sense. With no
 concurrency or errors this shouldn't fail. This is also why you rarely detect issues with dual writes in development
@@ -256,19 +256,19 @@ or staging environments unless you perform load testing and then run scripts to 
 <p>Time to try it with multiple servers writing to the databases. I'm going to omit the test case machine since it looks
 just like the last one except we initialize two servers with two different <code>startAt</code> values. Running with <code>-tc tcTwoServerDualWrites</code>
 should find a bug pretty fast. You'll see something like the following:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>...A bunch of stuff about all the state machines booting up and maybe some initial messages</span><span>
-</span><span>&lt;SendLog&gt; &#39;Server(6)&#39; in state &#39;SendMessages&#39; sent event &#39;eWriteReq with payload (20)&#39; to &#39;Database(3)&#39;.</span><span>
-</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eWriteReq with payload (20)&#39; in state &#39;WaitForRequests&#39;.</span><span>
-</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Primary,20,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Primary,20,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.</span><span>
-</span><span>&lt;SendLog&gt; &#39;Server(5)&#39; in state &#39;SendMessages&#39; sent event &#39;eWriteReq with payload (1)&#39; to &#39;Database(3)&#39;.</span><span>
-</span><span>&lt;SendLog&gt; &#39;Server(5)&#39; in state &#39;SendMessages&#39; sent event &#39;eWriteReq with payload (1)&#39; to &#39;Database(4)&#39;.</span><span>
-</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eWriteReq with payload (1)&#39; in state &#39;WaitForRequests&#39;.</span><span>
-</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Primary,1,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Primary,1,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.</span><span>
-</span><span>&lt;DequeueLog&gt; &#39;Database(4)&#39; dequeued event &#39;eWriteReq with payload (0)&#39; in state &#39;WaitForRequests&#39;.</span><span>
-</span><span>&lt;AnnounceLog&gt; &#39;Database(4)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Secondary,0,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Secondary,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.</span><span>
-</span><span>&lt;DequeueLog&gt; &#39;Database(4)&#39; dequeued event &#39;eWriteReq with payload (1)&#39; in state &#39;WaitForRequests&#39;.</span><span>
-</span><span>&lt;AnnounceLog&gt; &#39;Database(4)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Secondary,1,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Secondary,1,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.</span><span>
-</span><span>&lt;ErrorLog&gt; Assertion Failed: Sequences are out of order</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>...A bunch of stuff about all the state machines booting up and maybe some initial messages
+</span><span>&lt;SendLog&gt; &#39;Server(6)&#39; in state &#39;SendMessages&#39; sent event &#39;eWriteReq with payload (20)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eWriteReq with payload (20)&#39; in state &#39;WaitForRequests&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Primary,20,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Primary,20,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;SendLog&gt; &#39;Server(5)&#39; in state &#39;SendMessages&#39; sent event &#39;eWriteReq with payload (1)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;SendLog&gt; &#39;Server(5)&#39; in state &#39;SendMessages&#39; sent event &#39;eWriteReq with payload (1)&#39; to &#39;Database(4)&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eWriteReq with payload (1)&#39; in state &#39;WaitForRequests&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Primary,1,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Primary,1,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(4)&#39; dequeued event &#39;eWriteReq with payload (0)&#39; in state &#39;WaitForRequests&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(4)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Secondary,0,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Secondary,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(4)&#39; dequeued event &#39;eWriteReq with payload (1)&#39; in state &#39;WaitForRequests&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(4)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Secondary,1,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Secondary,1,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;ErrorLog&gt; Assertion Failed: Sequences are out of order
 </span></code></pre>
 <p>Server B sent its payload <code>20</code> to the primary, has not yet sent it to the secondary. Server A slips it's payload <code>1</code> over to both
 the primary and the secondary. In this run the primary saw <code>0, 20, 1</code> and the secondary saw <code>0, 1</code> before the assertion tripped.</p>
@@ -279,20 +279,20 @@ because its harder to fix problems there. If that write fails it probably isn't 
 completed, and you may not want to return an error to the user since their write <em>did</em> complete on the primary.</p>
 <p>We can model this failure with the simpler single server scenario. We just need to make the write to the secondary fallible
 in our model. One way to do that is with <code>$</code> which tells the model checker to branch. This is the update to the <code>Server</code> machine:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state SendMessages {</span><span>
-</span><span>    entry {</span><span>
-</span><span>        while (counter &lt; messageCount) {</span><span>
-</span><span>            send primary, eWriteReq, startAt + counter;</span><span>
-</span><span>            foreach (follower in followers) {</span><span>
-</span><span>                // now sometimes the secondary won&#39;t receive the message</span><span>
-</span><span>                if ($) {</span><span>
-</span><span>                    send follower, eWriteReq, startAt + counter;</span><span>
-</span><span>                }</span><span>
-</span><span>            }</span><span>
-</span><span>            counter = counter + 1;</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state SendMessages {
+</span><span>    entry {
+</span><span>        while (counter &lt; messageCount) {
+</span><span>            send primary, eWriteReq, startAt + counter;
+</span><span>            foreach (follower in followers) {
+</span><span>                // now sometimes the secondary won&#39;t receive the message
+</span><span>                if ($) {
+</span><span>                    send follower, eWriteReq, startAt + counter;
+</span><span>                }
+</span><span>            }
+</span><span>            counter = counter + 1;
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>If we re-run the now imperfectly named <code>tcPerfectDualWrites</code> we will either see an output very similar to the above, or a
 liveness violation as the sequences fail to converge. If you're following along and want to force a liveness violation you
@@ -366,52 +366,52 @@ implementations of the same approach.</p>
 <p>We're going to start with a simplified version of our replication log. It gets us to the state of having a leader
 database with followers and passes writes to followers through the leader instead of the server.</p>
 <p>A database can now be either leading or following:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state WaitForRequests {</span><span>
-</span><span>    on eWriteReq do (val: int) {</span><span>
-</span><span>        txId = txId + 1;</span><span>
-</span><span>        announce eWriteRecorded, (name, val);</span><span>
-</span><span>        foreach (replica in replicas) {</span><span>
-</span><span>            send replica, eUpdateFollower, (txId = txId, value = val);</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state WaitForRequests {
+</span><span>    on eWriteReq do (val: int) {
+</span><span>        txId = txId + 1;
+</span><span>        announce eWriteRecorded, (name, val);
+</span><span>        foreach (replica in replicas) {
+</span><span>            send replica, eUpdateFollower, (txId = txId, value = val);
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span><span>
-</span><span>state Following {</span><span>
-</span><span>    on eUpdateFollower do (payload: tFollowerMsg) {</span><span>
-</span><span>        announce eWriteRecorded, (name, payload.value);</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+</span><span>state Following {
+</span><span>    on eUpdateFollower do (payload: tFollowerMsg) {
+</span><span>        announce eWriteRecorded, (name, payload.value);
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>The replicator machine sits between the leader database and its follower. This is your Kafka consumer pulling events
 off the log to store updates or whatever mechanism you choose to update the log into the follower. We could just as
 easily model this system without the <code>Replicator</code> but it's going to have a little more logic soon and I didn't want
 to bloat the <code>Database</code> machine too much. For the moment it's just proxying update events to a follower:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine Replicator {</span><span>
-</span><span>    state SyncingFollower {</span><span>
-</span><span>        on eUpdateFollower do (payload: tFollowerMsg) {</span><span>
-</span><span>            send target, eUpdateFollower, payload;</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine Replicator {
+</span><span>    state SyncingFollower {
+</span><span>        on eUpdateFollower do (payload: tFollowerMsg) {
+</span><span>            send target, eUpdateFollower, payload;
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>We then set up the test case:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine LeaderFollower {</span><span>
-</span><span>    ... declarations</span><span>
-</span><span>    start state Init {</span><span>
-</span><span>        entry {</span><span>
-</span><span>            instances += (0, &quot;Leader&quot;);</span><span>
-</span><span>            instances += (1, &quot;Follower&quot;);</span><span>
-</span><span>            announce eMonitor_ConsistencyInit, instances;</span><span>
-</span><span>            // initialize the follower first and assign it to the replicator</span><span>
-</span><span>            follower = new Database((name = &quot;Follower&quot;, replicas = default(set[Replicator]), isLeader = false));</span><span>
-</span><span>            replicators += (new Replicator(follower));</span><span>
-</span><span>            // leader knows about its replicas, servers only talk to the leader</span><span>
-</span><span>            leader = new Database((name = &quot;Leader&quot;, replicas = replicators, isLeader = true));</span><span>
-</span><span>            servers += (new Server((primary = leader, followers = default(set[Database]), startAt = 0, messageCount = 10)));</span><span>
-</span><span>            servers += (new Server((primary = leader, followers = default(set[Database]), startAt = 20, messageCount = 10)));</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>machine LeaderFollower {
+</span><span>    ... declarations
+</span><span>    start state Init {
+</span><span>        entry {
+</span><span>            instances += (0, &quot;Leader&quot;);
+</span><span>            instances += (1, &quot;Follower&quot;);
+</span><span>            announce eMonitor_ConsistencyInit, instances;
+</span><span>            // initialize the follower first and assign it to the replicator
+</span><span>            follower = new Database((name = &quot;Follower&quot;, replicas = default(set[Replicator]), isLeader = false));
+</span><span>            replicators += (new Replicator(follower));
+</span><span>            // leader knows about its replicas, servers only talk to the leader
+</span><span>            leader = new Database((name = &quot;Leader&quot;, replicas = replicators, isLeader = true));
+</span><span>            servers += (new Server((primary = leader, followers = default(set[Database]), startAt = 0, messageCount = 10)));
+</span><span>            servers += (new Server((primary = leader, followers = default(set[Database]), startAt = 20, messageCount = 10)));
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>Running this shows no bugs, but we know this isn't quite complete. Let's talk about at least once delivery again.</p>
 <h3 id="errors-updating-the-follower">Errors updating the follower</h3>
@@ -422,72 +422,72 @@ that the response can get lost on the network. We should model what that looks l
 action so it will wait for a reply confirming the write. If it fails it will retry until it succeeds. This is
 how we maintain event ordering but it's also why we can't do it inside the request handler process. Replication
 lag is acceptable to some extent in a background process, not at all so within a request handler in the server.</p>
-<p>On the database side we'll just model the &quot;reply never comes&quot; problem. Errors are handled the same way so it would
+<p>On the database side we'll just model the "reply never comes" problem. Errors are handled the same way so it would
 just be noise in the model.</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Following {</span><span>
-</span><span>    on eUpdateFollower do (payload: tFollowerMsg) {</span><span>
-</span><span>        announce eWriteRecorded, (name, payload.message.value);</span><span>
-</span><span>        if ($) {</span><span>
-</span><span>            send payload.replyTo, eAckWrite;</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Following {
+</span><span>    on eUpdateFollower do (payload: tFollowerMsg) {
+</span><span>        announce eWriteRecorded, (name, payload.message.value);
+</span><span>        if ($) {
+</span><span>            send payload.replyTo, eAckWrite;
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>The event payload has been updated to contain the machine to reply to and the actual event payload is under the
 <code>message</code> property of the event. Because of the <code>$</code> sometimes we'll just drop the reply on the floor.</p>
 <p>The replicator implementation is now:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state SyncingFollower {</span><span>
-</span><span>    on eReplicateWrite do (payload: tReplicateMsg) {</span><span>
-</span><span>        writeSucceeded = false;</span><span>
-</span><span>        while (!writeSucceeded) {</span><span>
-</span><span>            send target, eUpdateFollower, (replyTo = this, message = payload);</span><span>
-</span><span>            receive {</span><span>
-</span><span>                case eAckWrite: {</span><span>
-</span><span>                    writeSucceeded = true;</span><span>
-</span><span>                }</span><span>
-</span><span>            }</span><span>
-</span><span>        }</span><span>
-</span><span>        </span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state SyncingFollower {
+</span><span>    on eReplicateWrite do (payload: tReplicateMsg) {
+</span><span>        writeSucceeded = false;
+</span><span>        while (!writeSucceeded) {
+</span><span>            send target, eUpdateFollower, (replyTo = this, message = payload);
+</span><span>            receive {
+</span><span>                case eAckWrite: {
+</span><span>                    writeSucceeded = true;
+</span><span>                }
+</span><span>            }
+</span><span>        }
+</span><span>        
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>We keep trying to send the message to the follower until it replies before moving on to the next message. If
 we run the spec now we should get an error like the following:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&lt;SendLog&gt; &#39;Replicator(4)&#39; in state &#39;SyncingFollower&#39; sent event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; to &#39;Database(3)&#39;.</span><span>
-</span><span>&lt;ReceiveLog&gt; Replicator(4) is waiting to dequeue an event of type &#39;eAckWrite&#39; or &#39;PHalt&#39; in state &#39;SyncingFollower&#39;.</span><span>
-</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; in state &#39;Following&#39;.</span><span>
-</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Follower,0,&gt;.&lt;MonitorLog&gt; PImplementation.</span><span>
-</span><span>ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Follower,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.</span><span>
-</span><span>// notice the lack of ack</span><span>
-</span><span>...</span><span>
-</span><span>&lt;ErrorLog&gt; Deadlock detected. Replicator(4) is waiting to receive an event, but no other controlled tasks are enabled.</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&lt;SendLog&gt; &#39;Replicator(4)&#39; in state &#39;SyncingFollower&#39; sent event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;ReceiveLog&gt; Replicator(4) is waiting to dequeue an event of type &#39;eAckWrite&#39; or &#39;PHalt&#39; in state &#39;SyncingFollower&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; in state &#39;Following&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Follower,0,&gt;.&lt;MonitorLog&gt; PImplementation.
+</span><span>ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Follower,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>// notice the lack of ack
+</span><span>...
+</span><span>&lt;ErrorLog&gt; Deadlock detected. Replicator(4) is waiting to receive an event, but no other controlled tasks are enabled.
 </span></code></pre>
 <p>That one makes sense, we're not timing out our wait so the replicator is effectively dead waiting on a network
 reply that never comes. I pulled in a <code>Timer</code> module from the P lang's example repo and added that to the
 replicator. The receive block now waits on an <code>ack</code> or times out at which point it will retry the message.</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>receive {</span><span>
-</span><span>    case eAckWrite: {</span><span>
-</span><span>        writeSucceeded = true;</span><span>
-</span><span>        CancelTimer(timer);</span><span>
-</span><span>    }</span><span>
-</span><span>    case eTimeOut: {</span><span>
-</span><span>        print format(&quot;Timed out with tx: {0}, retrying&quot;, payload.txId);</span><span>
-</span><span>        StartTimer(timer);</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>receive {
+</span><span>    case eAckWrite: {
+</span><span>        writeSucceeded = true;
+</span><span>        CancelTimer(timer);
+</span><span>    }
+</span><span>    case eTimeOut: {
+</span><span>        print format(&quot;Timed out with tx: {0}, retrying&quot;, payload.txId);
+</span><span>        StartTimer(timer);
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>You probably know where this is going.</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&lt;SendLog&gt; &#39;Replicator(4)&#39; in state &#39;SyncingFollower&#39; sent event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; to &#39;Database(3)&#39;.</span><span>
-</span><span>&lt;ReceiveLog&gt; &#39;Replicator(4)&#39; dequeued event &#39;eTimeOut&#39; in state &#39;SyncingFollower&#39;.</span><span>
-</span><span>&lt;PrintLog&gt; Timed out with tx: 1, retrying</span><span>
-</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; in state &#39;Following&#39;.</span><span>
-</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Follower,0,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Follower,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.</span><span>
-</span><span>&lt;SendLog&gt; &#39;Replicator(4)&#39; in state &#39;SyncingFollower&#39; sent event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; to &#39;Database(3)&#39;.</span><span>
-</span><span>&lt;ReceiveLog&gt; Replicator(4) is waiting to dequeue an event of type &#39;eAckWrite&#39;, &#39;eTimeOut&#39; or &#39;PHalt&#39; in state &#39;SyncingFollower&#39;.</span><span>
-</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; in state &#39;Following&#39;.</span><span>
-</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Follower,0,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Follower,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.</span><span>
-</span><span>&lt;ErrorLog&gt; Assertion Failed: Sequences are out of order</span><span>
-</span><span>&lt;StrategyLog&gt; Found bug using &#39;random&#39; strategy.</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&lt;SendLog&gt; &#39;Replicator(4)&#39; in state &#39;SyncingFollower&#39; sent event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;ReceiveLog&gt; &#39;Replicator(4)&#39; dequeued event &#39;eTimeOut&#39; in state &#39;SyncingFollower&#39;.
+</span><span>&lt;PrintLog&gt; Timed out with tx: 1, retrying
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; in state &#39;Following&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Follower,0,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Follower,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;SendLog&gt; &#39;Replicator(4)&#39; in state &#39;SyncingFollower&#39; sent event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; to &#39;Database(3)&#39;.
+</span><span>&lt;ReceiveLog&gt; Replicator(4) is waiting to dequeue an event of type &#39;eAckWrite&#39;, &#39;eTimeOut&#39; or &#39;PHalt&#39; in state &#39;SyncingFollower&#39;.
+</span><span>&lt;DequeueLog&gt; &#39;Database(3)&#39; dequeued event &#39;eUpdateFollower with payload (&lt;replyTo:Replicator(4), message:&lt;txId:1, value:0, &gt;, &gt;)&#39; in state &#39;Following&#39;.
+</span><span>&lt;AnnounceLog&gt; &#39;Database(3)&#39; announced event &#39;eWriteRecorded&#39; with payload &lt;Follower,0,&gt;.&lt;MonitorLog&gt; PImplementation.ConsistencyInvariant is processing event &#39;eWriteRecorded with payload (&lt;Follower,0,&gt;)&#39; in state &#39;WaitForSequencesToMatch&#39;.
+</span><span>&lt;ErrorLog&gt; Assertion Failed: Sequences are out of order
+</span><span>&lt;StrategyLog&gt; Found bug using &#39;random&#39; strategy.
 </span></code></pre>
 <p>This isn't what I expected, but it also makes sense. In this case the replicator timed out waiting on the
 send to the follower so it retried. However, both messages actually made it to the follower <em>eventually</em>, we just
@@ -496,18 +496,18 @@ you need to account for such things.</p>
 <h3 id="successful-replication">Successful Replication</h3>
 <p>We're already passing around a transaction ID generated in the leader so we have the information we need
 to handle duplicate messages that come in on the follower.</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Following {</span><span>
-</span><span>    on eUpdateFollower do (payload: tFollowerMsg) {</span><span>
-</span><span>        if (payload.message.txId &gt; txId) {</span><span>
-</span><span>            announce eWriteRecorded, (name, payload.message.value);</span><span>
-</span><span>            txId = payload.message.txId;</span><span>
-</span><span>        }</span><span>
-</span><span>        </span><span>
-</span><span>        if ($) {</span><span>
-</span><span>            send payload.replyTo, eAckWrite;</span><span>
-</span><span>        }</span><span>
-</span><span>    }</span><span>
-</span><span>}</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>state Following {
+</span><span>    on eUpdateFollower do (payload: tFollowerMsg) {
+</span><span>        if (payload.message.txId &gt; txId) {
+</span><span>            announce eWriteRecorded, (name, payload.message.value);
+</span><span>            txId = payload.message.txId;
+</span><span>        }
+</span><span>        
+</span><span>        if ($) {
+</span><span>            send payload.replyTo, eAckWrite;
+</span><span>        }
+</span><span>    }
+</span><span>}
 </span></code></pre>
 <p>We only process (store) the command if the transaction ID is greater than our last seen transaction. Because the replicator
 will keep trying indefinitely until it knows the message was stored, these duplicates are still in processing order. Once

@@ -59,7 +59,7 @@
         </time>
     </div>
     <div itemprop="articleBody">
-        <p>P is a <a href="https://www.microsoft.com/en-us/research/blog/p-programming-language-asynchrony/">programming language</a> designed to model other computer programs. 
+        <p>P is a <a href="https://www.microsoft.com/en-us/research/blog/p-programming-language-asynchrony/">programming language</a> designed to model other computer programs.
 It's similar to TLA+ in that you are working at a much higher level of abstraction than the final program. P provides a formal specification of the program
 or protocol that is helpful both as a thinking aid and a mechanism for checking correctness.
 This helps you find bugs <em>very</em> early, when you're still thinking about how you are going to design something.
@@ -106,7 +106,7 @@ is the dotnet version it's working with (probably netcoreapp3.1) and <code>somet
 <li>Most programs will at least have a ./PSrc directory with the definitions of your state machines and a ./PTst file that defines the different test cases.</li>
 <li>The simplest test case that works looks is basically what this blog post is going to be running on. It'll look something like this:
 <code>test ReactComponent [main=User]: {User,Component};</code>. It's the <code>test</code> keyword followed by a name for the test that you can provide.
-<code>[main=&lt;...&gt;]</code> is saying &quot;the main state machine that kicks everything off is ...&quot;. Then you provide the list of definitions needed. This is likely to just be the list of machines used
+<code>[main=&lt;...&gt;]</code> is saying "the main state machine that kicks everything off is ...". Then you provide the list of definitions needed. This is likely to just be the list of machines used
 in the test but there is also a module system to substitute complex machines for simple substitutes if you need to limit the state search space.</li>
 </ul>
 <p>In the official docs you can find a more complex test set definition <a href="https://github.com/p-org/P/blob/438182d2689c608b961594c862e7f7874382ab07/Tutorial/1_ClientServer/PTst/Testscript.p">here</a> where

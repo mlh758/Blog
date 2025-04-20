@@ -253,14 +253,14 @@ bring this beast into our form. Import it:</p>
 <p>I removed the other <code>required</code> attributes and the <code>textarea</code> for this example, but you should now see something like this:</p>
 <p><img src="/uncontrolled-forms/checkbox_group.png" alt="required checkbox group" /></p>
 <p>If you check one of the boxes the form will be valid and you can submit. If you try to submit with nothing checked you should
-see a dialog like before with the &quot;You must select at least one option&quot; message over your checkboxes. You might also have noticed
+see a dialog like before with the "You must select at least one option" message over your checkboxes. You might also have noticed
 that the <code>fieldset</code> has a red box shadow around it. <code>Form</code> and <code>Fieldset</code> tags can also be invalid. If you wanted to eliminate this
 you could make those <code>*:invalid</code> selectors more specifc but I was being lazy and just wanted to highlight everything. You can leverage
 this to display additional hints around the form or field sets that are invalid if you want to give broader hints or feedback to your users.</p>
 <h4 id="alternative-implementations">Alternative Implementations</h4>
 <p>You might end up having to use an input control from a third party library that <em>has</em> to be used in a controlled fashion. It might send asynchronous
 requests or just not be designed with regular forms in mind. If something like this comes up, you can abstract this control away by making it a separate component
-and using a <code>&lt;input type=&quot;hidden&quot; name=&quot;whatever&quot; /&gt;</code> to store the actual value. This separate component can be a normal controlled React component but the form doesn't need
+and using a <code>&lt;input type="hidden" name="whatever" /&gt;</code> to store the actual value. This separate component can be a normal controlled React component but the form doesn't need
 to know that. As long as the hidden input has the expected name when the user clicks submit that data will be available.</p>
 <p>Another alternative is to just make those elements controlled directly in your form component and inject the data into the <code>FormData</code> object in your <code>onSubmit</code> handler. If you
 have a big form this can still save you a lot of work.</p>

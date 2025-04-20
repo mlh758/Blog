@@ -88,50 +88,50 @@ instead.</p>
 <p>My first thought was to do something simple like iterate over the new array comparing the order to the old one. When I find the changed element use <code>findIndex</code> on the old array and done. I knew right away this was too simplistic since whichever direction I iterated from reordering up or down the array would make one of those look like too many things had changed. This seemed like a common enough problem that I could probably get an LLM to make this function for me. This was only the first step in trying to optimize a pretty deep component tree and I didn't want to spend a lot of time on it.</p>
 <h3 id="hey-that-s-just-my-bad-idea-again">Hey that's just my bad idea again</h3>
 <p>I used this prompt:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>Given two arrays of IDs where a single element was moved to a new location in the array,</span><span>
-</span><span>determine which element was moved and to which location.</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>Given two arrays of IDs where a single element was moved to a new location in the array,
+</span><span>determine which element was moved and to which location.
 </span><span>
-</span><span>Also tried: Given two arrays A and B where A is the original state and B is the array</span><span>
-</span><span>after moving one item to another location in the array,</span><span>
-</span><span>provide a function for determining which element was moved and to where.</span><span>
+</span><span>Also tried: Given two arrays A and B where A is the original state and B is the array
+</span><span>after moving one item to another location in the array,
+</span><span>provide a function for determining which element was moved and to where.
 </span></code></pre>
 <p>I received this code in response:</p>
-<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">function </span><span style="color:#8fa1b3;">findMovedElement</span><span>(</span><span style="color:#bf616a;">originalArray</span><span>, </span><span style="color:#bf616a;">newArray</span><span>) {</span><span>
-</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#d08770;">null</span><span>;</span><span>
-</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">originalIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">newIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;</span><span>
+<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">function </span><span style="color:#8fa1b3;">findMovedElement</span><span>(</span><span style="color:#bf616a;">originalArray</span><span>, </span><span style="color:#bf616a;">newArray</span><span>) {
+</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#d08770;">null</span><span>;
+</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">originalIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;
+</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">newIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Create a map to store the indices of elements in the original array</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">originalIndexMap </span><span>= new Map();</span><span>
-</span><span>  </span><span style="color:#bf616a;">originalArray</span><span>.</span><span style="color:#96b5b4;">forEach</span><span>((</span><span style="color:#bf616a;">element</span><span>, </span><span style="color:#bf616a;">index</span><span>) </span><span style="color:#b48ead;">=&gt; </span><span>{</span><span>
-</span><span>    </span><span style="color:#bf616a;">originalIndexMap</span><span>.</span><span style="color:#96b5b4;">set</span><span>(</span><span style="color:#bf616a;">element</span><span>, </span><span style="color:#bf616a;">index</span><span>);</span><span>
-</span><span>  });</span><span>
+</span><span>  </span><span style="color:#65737e;">// Create a map to store the indices of elements in the original array
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">originalIndexMap </span><span>= new Map();
+</span><span>  </span><span style="color:#bf616a;">originalArray</span><span>.</span><span style="color:#96b5b4;">forEach</span><span>((</span><span style="color:#bf616a;">element</span><span>, </span><span style="color:#bf616a;">index</span><span>) </span><span style="color:#b48ead;">=&gt; </span><span>{
+</span><span>    </span><span style="color:#bf616a;">originalIndexMap</span><span>.</span><span style="color:#96b5b4;">set</span><span>(</span><span style="color:#bf616a;">element</span><span>, </span><span style="color:#bf616a;">index</span><span>);
+</span><span>  });
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Iterate through the new array to find the moved element</span><span>
-</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#d08770;">0</span><span>; </span><span style="color:#bf616a;">i </span><span>&lt; </span><span style="color:#bf616a;">newArray</span><span>.length; </span><span style="color:#bf616a;">i</span><span>++) {</span><span>
-</span><span>    </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">element </span><span>= </span><span style="color:#bf616a;">newArray</span><span>[</span><span style="color:#bf616a;">i</span><span>];</span><span>
-</span><span>    </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">originalIndexMap</span><span>.</span><span style="color:#96b5b4;">has</span><span>(</span><span style="color:#bf616a;">element</span><span>)) {</span><span>
-</span><span>      </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">originalIdx </span><span>= </span><span style="color:#bf616a;">originalIndexMap</span><span>.</span><span style="color:#96b5b4;">get</span><span>(</span><span style="color:#bf616a;">element</span><span>);</span><span>
-</span><span>      </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">originalIdx </span><span>!== </span><span style="color:#bf616a;">i</span><span>) {</span><span>
-</span><span>        </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">element</span><span>;</span><span>
-</span><span>        </span><span style="color:#bf616a;">originalIndex </span><span>= </span><span style="color:#bf616a;">originalIdx</span><span>;</span><span>
-</span><span>        </span><span style="color:#bf616a;">newIndex </span><span>= </span><span style="color:#bf616a;">i</span><span>;</span><span>
-</span><span>        </span><span style="color:#b48ead;">break</span><span>;</span><span>
-</span><span>      }</span><span>
-</span><span>    }</span><span>
-</span><span>  }</span><span>
+</span><span>  </span><span style="color:#65737e;">// Iterate through the new array to find the moved element
+</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#d08770;">0</span><span>; </span><span style="color:#bf616a;">i </span><span>&lt; </span><span style="color:#bf616a;">newArray</span><span>.length; </span><span style="color:#bf616a;">i</span><span>++) {
+</span><span>    </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">element </span><span>= </span><span style="color:#bf616a;">newArray</span><span>[</span><span style="color:#bf616a;">i</span><span>];
+</span><span>    </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">originalIndexMap</span><span>.</span><span style="color:#96b5b4;">has</span><span>(</span><span style="color:#bf616a;">element</span><span>)) {
+</span><span>      </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">originalIdx </span><span>= </span><span style="color:#bf616a;">originalIndexMap</span><span>.</span><span style="color:#96b5b4;">get</span><span>(</span><span style="color:#bf616a;">element</span><span>);
+</span><span>      </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">originalIdx </span><span>!== </span><span style="color:#bf616a;">i</span><span>) {
+</span><span>        </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">element</span><span>;
+</span><span>        </span><span style="color:#bf616a;">originalIndex </span><span>= </span><span style="color:#bf616a;">originalIdx</span><span>;
+</span><span>        </span><span style="color:#bf616a;">newIndex </span><span>= </span><span style="color:#bf616a;">i</span><span>;
+</span><span>        </span><span style="color:#b48ead;">break</span><span>;
+</span><span>      }
+</span><span>    }
+</span><span>  }
 </span><span>
-</span><span>  </span><span style="color:#b48ead;">return </span><span>{ </span><span style="color:#bf616a;">movedElement</span><span>, </span><span style="color:#bf616a;">originalIndex</span><span>, </span><span style="color:#bf616a;">newIndex </span><span>};</span><span>
-</span><span>}</span><span>
+</span><span>  </span><span style="color:#b48ead;">return </span><span>{ </span><span style="color:#bf616a;">movedElement</span><span>, </span><span style="color:#bf616a;">originalIndex</span><span>, </span><span style="color:#bf616a;">newIndex </span><span>};
+</span><span>}
 </span></code></pre>
 <p>This is basically what I had envisioned doing initially and knew couldn't be correct. Here's an initial test:</p>
-<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">let </span><span style="color:#bf616a;">a </span><span>= [</span><span style="color:#d08770;">1</span><span>, </span><span style="color:#d08770;">2</span><span>, </span><span style="color:#d08770;">3</span><span>, </span><span style="color:#d08770;">4</span><span>, </span><span style="color:#d08770;">5</span><span>]</span><span>
-</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">b </span><span>= [</span><span style="color:#d08770;">1</span><span>, </span><span style="color:#d08770;">3</span><span>, </span><span style="color:#d08770;">2</span><span>, </span><span style="color:#d08770;">4</span><span>, </span><span style="color:#d08770;">5</span><span>]</span><span>
-</span><span style="color:#8fa1b3;">findMovedElement</span><span>(</span><span style="color:#bf616a;">a</span><span>, </span><span style="color:#bf616a;">b</span><span>) </span><span style="color:#65737e;">// {movedElement: 3, originalIndex: 2, newIndex: 1}</span><span>
+<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">let </span><span style="color:#bf616a;">a </span><span>= [</span><span style="color:#d08770;">1</span><span>, </span><span style="color:#d08770;">2</span><span>, </span><span style="color:#d08770;">3</span><span>, </span><span style="color:#d08770;">4</span><span>, </span><span style="color:#d08770;">5</span><span>]
+</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">b </span><span>= [</span><span style="color:#d08770;">1</span><span>, </span><span style="color:#d08770;">3</span><span>, </span><span style="color:#d08770;">2</span><span>, </span><span style="color:#d08770;">4</span><span>, </span><span style="color:#d08770;">5</span><span>]
+</span><span style="color:#8fa1b3;">findMovedElement</span><span>(</span><span style="color:#bf616a;">a</span><span>, </span><span style="color:#bf616a;">b</span><span>) </span><span style="color:#65737e;">// {movedElement: 3, originalIndex: 2, newIndex: 1}
 </span></code></pre>
 <p>So far so good I suppose. But what about the other direction and not a trivial swap?</p>
-<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#bf616a;">b </span><span>= [</span><span style="color:#d08770;">2</span><span>, </span><span style="color:#d08770;">3</span><span>, </span><span style="color:#d08770;">4</span><span>, </span><span style="color:#d08770;">5</span><span>, </span><span style="color:#d08770;">1</span><span>]</span><span>
-</span><span style="color:#8fa1b3;">findMovedElement</span><span>(</span><span style="color:#bf616a;">a</span><span>, </span><span style="color:#bf616a;">b</span><span>) </span><span style="color:#65737e;">// {movedElement: 2, originalIndex: 1, newIndex: 0}</span><span>
+<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#bf616a;">b </span><span>= [</span><span style="color:#d08770;">2</span><span>, </span><span style="color:#d08770;">3</span><span>, </span><span style="color:#d08770;">4</span><span>, </span><span style="color:#d08770;">5</span><span>, </span><span style="color:#d08770;">1</span><span>]
+</span><span style="color:#8fa1b3;">findMovedElement</span><span>(</span><span style="color:#bf616a;">a</span><span>, </span><span style="color:#bf616a;">b</span><span>) </span><span style="color:#65737e;">// {movedElement: 2, originalIndex: 1, newIndex: 0}
 </span></code></pre>
 <p>Well that's not right. I dragged  <code>1</code> down to the end. <code>2</code> just seems like it moved because
 the algorithm is only looking at the first mismatch and stopping. Then it hit me, drag and drop
@@ -144,159 +144,159 @@ the minimum number of insertions, deletions, and substitutions needed to turn on
 <p>Unfortunately I'm also somewhat lazy and I didn't feel like piecing together the code from several examples and translating it from C to JavaScript. I'm also really not supposed to be spending much time on the issue. Now that I have a better idea of what I'm asking for, let's try the LLM again.</p>
 <h3 id="ai-tries-edit-distance">AI tries edit distance</h3>
 <p>This was my next prompt:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>Given two arrays A and B where A is the original state and B</span><span>
-</span><span>is the array after moving one item to another location in the</span><span>
-</span><span>array, provide a function for determining which element was</span><span>
-</span><span>moved using the Levenshtein edit distance algorithm</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>Given two arrays A and B where A is the original state and B
+</span><span>is the array after moving one item to another location in the
+</span><span>array, provide a function for determining which element was
+</span><span>moved using the Levenshtein edit distance algorithm
 </span></code></pre>
 <p>I was given this code in return:</p>
-<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">function </span><span style="color:#8fa1b3;">findMovedElementUsingEditDistance</span><span>(</span><span style="color:#bf616a;">A</span><span>, </span><span style="color:#bf616a;">B</span><span>) {</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">m </span><span>= </span><span style="color:#bf616a;">A</span><span>.length;</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">n </span><span>= </span><span style="color:#bf616a;">B</span><span>.length;</span><span>
+<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">function </span><span style="color:#8fa1b3;">findMovedElementUsingEditDistance</span><span>(</span><span style="color:#bf616a;">A</span><span>, </span><span style="color:#bf616a;">B</span><span>) {
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">m </span><span>= </span><span style="color:#bf616a;">A</span><span>.length;
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">n </span><span>= </span><span style="color:#bf616a;">B</span><span>.length;
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Initialize the dp table</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">dp </span><span>= </span><span style="color:#ebcb8b;">Array</span><span>.</span><span style="color:#8fa1b3;">from</span><span>({ length: </span><span style="color:#bf616a;">m </span><span>+ </span><span style="color:#d08770;">1 </span><span>}, () </span><span style="color:#b48ead;">=&gt; </span><span style="color:#ebcb8b;">Array</span><span>(</span><span style="color:#bf616a;">n </span><span>+ </span><span style="color:#d08770;">1</span><span>).</span><span style="color:#8fa1b3;">fill</span><span>(</span><span style="color:#d08770;">0</span><span>));</span><span>
+</span><span>  </span><span style="color:#65737e;">// Initialize the dp table
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">dp </span><span>= </span><span style="color:#ebcb8b;">Array</span><span>.</span><span style="color:#8fa1b3;">from</span><span>({ length: </span><span style="color:#bf616a;">m </span><span>+ </span><span style="color:#d08770;">1 </span><span>}, () </span><span style="color:#b48ead;">=&gt; </span><span style="color:#ebcb8b;">Array</span><span>(</span><span style="color:#bf616a;">n </span><span>+ </span><span style="color:#d08770;">1</span><span>).</span><span style="color:#8fa1b3;">fill</span><span>(</span><span style="color:#d08770;">0</span><span>));
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Fill in the base cases</span><span>
-</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#d08770;">0</span><span>; </span><span style="color:#bf616a;">i </span><span>&lt;= </span><span style="color:#bf616a;">m</span><span>; </span><span style="color:#bf616a;">i</span><span>++) </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#d08770;">0</span><span>] = </span><span style="color:#bf616a;">i</span><span>;</span><span>
-</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#d08770;">0</span><span>; </span><span style="color:#bf616a;">j </span><span>&lt;= </span><span style="color:#bf616a;">n</span><span>; </span><span style="color:#bf616a;">j</span><span>++) </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#d08770;">0</span><span>][</span><span style="color:#bf616a;">j</span><span>] = </span><span style="color:#bf616a;">j</span><span>;</span><span>
+</span><span>  </span><span style="color:#65737e;">// Fill in the base cases
+</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#d08770;">0</span><span>; </span><span style="color:#bf616a;">i </span><span>&lt;= </span><span style="color:#bf616a;">m</span><span>; </span><span style="color:#bf616a;">i</span><span>++) </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#d08770;">0</span><span>] = </span><span style="color:#bf616a;">i</span><span>;
+</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#d08770;">0</span><span>; </span><span style="color:#bf616a;">j </span><span>&lt;= </span><span style="color:#bf616a;">n</span><span>; </span><span style="color:#bf616a;">j</span><span>++) </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#d08770;">0</span><span>][</span><span style="color:#bf616a;">j</span><span>] = </span><span style="color:#bf616a;">j</span><span>;
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Fill in the dp table</span><span>
-</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#d08770;">1</span><span>; </span><span style="color:#bf616a;">i </span><span>&lt;= </span><span style="color:#bf616a;">m</span><span>; </span><span style="color:#bf616a;">i</span><span>++) {</span><span>
-</span><span>    </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#d08770;">1</span><span>; </span><span style="color:#bf616a;">j </span><span>&lt;= </span><span style="color:#bf616a;">n</span><span>; </span><span style="color:#bf616a;">j</span><span>++) {</span><span>
-</span><span>      </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {</span><span>
-</span><span>        </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] = </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>];</span><span>
-</span><span>      } </span><span style="color:#b48ead;">else </span><span>{</span><span>
-</span><span>        </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] = Math.</span><span style="color:#96b5b4;">min</span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>], </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) + </span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span>      }</span><span>
-</span><span>    }</span><span>
-</span><span>  }</span><span>
+</span><span>  </span><span style="color:#65737e;">// Fill in the dp table
+</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#d08770;">1</span><span>; </span><span style="color:#bf616a;">i </span><span>&lt;= </span><span style="color:#bf616a;">m</span><span>; </span><span style="color:#bf616a;">i</span><span>++) {
+</span><span>    </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#d08770;">1</span><span>; </span><span style="color:#bf616a;">j </span><span>&lt;= </span><span style="color:#bf616a;">n</span><span>; </span><span style="color:#bf616a;">j</span><span>++) {
+</span><span>      </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {
+</span><span>        </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] = </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>];
+</span><span>      } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>        </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] = Math.</span><span style="color:#96b5b4;">min</span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>], </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) + </span><span style="color:#d08770;">1</span><span>;
+</span><span>      }
+</span><span>    }
+</span><span>  }
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Trace back to find the moved element</span><span>
-</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#bf616a;">m</span><span>, </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#bf616a;">n</span><span>;</span><span>
-</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#d08770;">null</span><span>;</span><span>
-</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">originalIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">newIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;</span><span>
+</span><span>  </span><span style="color:#65737e;">// Trace back to find the moved element
+</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#bf616a;">m</span><span>, </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#bf616a;">n</span><span>;
+</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#d08770;">null</span><span>;
+</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">originalIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;
+</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">newIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;
 </span><span>
-</span><span>  </span><span style="color:#b48ead;">while </span><span>(</span><span style="color:#bf616a;">i </span><span>&gt; </span><span style="color:#d08770;">0 </span><span>&amp;&amp; </span><span style="color:#bf616a;">j </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) {</span><span>
-</span><span>    </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {</span><span>
-</span><span>      </span><span style="color:#bf616a;">i</span><span>--;</span><span>
-</span><span>      </span><span style="color:#bf616a;">j</span><span>--;</span><span>
-</span><span>    } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] === </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>] + </span><span style="color:#d08770;">1</span><span>) {</span><span>
-</span><span>      </span><span style="color:#65737e;">// Deletion in A</span><span>
-</span><span>      </span><span style="color:#bf616a;">i</span><span>--;</span><span>
-</span><span>    } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] === </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>] + </span><span style="color:#d08770;">1</span><span>) {</span><span>
-</span><span>      </span><span style="color:#65737e;">// Insertion in B</span><span>
-</span><span>      </span><span style="color:#bf616a;">j</span><span>--;</span><span>
-</span><span>    } </span><span style="color:#b48ead;">else </span><span>{</span><span>
-</span><span>      </span><span style="color:#65737e;">// Move operation</span><span>
-</span><span>      </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>];</span><span>
-</span><span>      </span><span style="color:#bf616a;">originalIndex </span><span>= </span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span>      </span><span style="color:#bf616a;">newIndex </span><span>= </span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span>      </span><span style="color:#b48ead;">break</span><span>;</span><span>
-</span><span>    }</span><span>
-</span><span>  }</span><span>
+</span><span>  </span><span style="color:#b48ead;">while </span><span>(</span><span style="color:#bf616a;">i </span><span>&gt; </span><span style="color:#d08770;">0 </span><span>&amp;&amp; </span><span style="color:#bf616a;">j </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) {
+</span><span>    </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {
+</span><span>      </span><span style="color:#bf616a;">i</span><span>--;
+</span><span>      </span><span style="color:#bf616a;">j</span><span>--;
+</span><span>    } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] === </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>] + </span><span style="color:#d08770;">1</span><span>) {
+</span><span>      </span><span style="color:#65737e;">// Deletion in A
+</span><span>      </span><span style="color:#bf616a;">i</span><span>--;
+</span><span>    } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] === </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>] + </span><span style="color:#d08770;">1</span><span>) {
+</span><span>      </span><span style="color:#65737e;">// Insertion in B
+</span><span>      </span><span style="color:#bf616a;">j</span><span>--;
+</span><span>    } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>      </span><span style="color:#65737e;">// Move operation
+</span><span>      </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>];
+</span><span>      </span><span style="color:#bf616a;">originalIndex </span><span>= </span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>;
+</span><span>      </span><span style="color:#bf616a;">newIndex </span><span>= </span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>;
+</span><span>      </span><span style="color:#b48ead;">break</span><span>;
+</span><span>    }
+</span><span>  }
 </span><span>
-</span><span>  </span><span style="color:#b48ead;">return </span><span>{ </span><span style="color:#bf616a;">movedElement</span><span>, </span><span style="color:#bf616a;">originalIndex</span><span>, </span><span style="color:#bf616a;">newIndex </span><span>};</span><span>
-</span><span>}</span><span>
+</span><span>  </span><span style="color:#b48ead;">return </span><span>{ </span><span style="color:#bf616a;">movedElement</span><span>, </span><span style="color:#bf616a;">originalIndex</span><span>, </span><span style="color:#bf616a;">newIndex </span><span>};
+</span><span>}
 </span></code></pre>
 <p>Testing with our same <code>b</code> array as before:</p>
-<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">let </span><span style="color:#bf616a;">b </span><span>= [</span><span style="color:#d08770;">1</span><span>, </span><span style="color:#d08770;">3</span><span>, </span><span style="color:#d08770;">4</span><span>, </span><span style="color:#d08770;">5</span><span>, </span><span style="color:#d08770;">2</span><span>]</span><span>
-</span><span style="color:#8fa1b3;">findMovedElementUsingEditDistance</span><span>(</span><span style="color:#bf616a;">a</span><span>, </span><span style="color:#bf616a;">b</span><span>) </span><span style="color:#65737e;">// {movedElement: null, originalIndex: -1, newIndex: -1}</span><span>
+<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">let </span><span style="color:#bf616a;">b </span><span>= [</span><span style="color:#d08770;">1</span><span>, </span><span style="color:#d08770;">3</span><span>, </span><span style="color:#d08770;">4</span><span>, </span><span style="color:#d08770;">5</span><span>, </span><span style="color:#d08770;">2</span><span>]
+</span><span style="color:#8fa1b3;">findMovedElementUsingEditDistance</span><span>(</span><span style="color:#bf616a;">a</span><span>, </span><span style="color:#bf616a;">b</span><span>) </span><span style="color:#65737e;">// {movedElement: null, originalIndex: -1, newIndex: -1}
 </span></code></pre>
 <p>Well that's not right. Let's prompt a correction:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>When I provide arrays [1, 2, 3, 4, 5] and [1, 3, 4, 5, 2] The answer should be { movedElement: 2, originalIndex: 1, newIndex: 4} but with that function the movedElement is null which is incorrect</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>When I provide arrays [1, 2, 3, 4, 5] and [1, 3, 4, 5, 2] The answer should be { movedElement: 2, originalIndex: 1, newIndex: 4} but with that function the movedElement is null which is incorrect
 </span></code></pre>
 <p>When I did that it just stuck a variation of the first, already incorrect code at the end of the edit distance function and called into that if the trace didn't return an answer. At least I didn't get <code>null</code> anymore I guess?</p>
 <p>In retrospect I think it was the trace back code that was incorrect here. It also didn't use Levenshtein distance. I've run into this kind of issue before tinkering with LLMs to create code I was curious about. For example I tried to have one generate code implementing a <a href="https://en.wikipedia.org/wiki/Generic_cell_rate_algorithm">generic cell rate algorithm</a>. I was going to be storing rate limiting information in Redis and updating it with a Lua script. GCRA requires less state than some other token bucket style algorithms which would mean fewer moving parts within Redis to keep track of. No matter how I asked, I would always get an implementation of token bucket, and usually incorrect ones. There's just far more example code of that floating around.</p>
 <p>You can see that in the trace code insertions and deletions are ignored completely. If instead I modify the trace code to <em>only</em> look at those two operations, and catch the boundary case where items are moved to or from the edges of the list (such as last element moved to first) then I seem to get correct answers. I didn't look too carefully at this before since I wasn't getting the answers I wanted and didn't feel like debugging AI code if I wasn't going to keep it.</p>
-<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#bf616a;">m</span><span>, </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#bf616a;">n</span><span>;</span><span>
-</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#d08770;">null</span><span>;</span><span>
-</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">originalIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">newIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;</span><span>
+<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#bf616a;">m</span><span>, </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#bf616a;">n</span><span>;
+</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#d08770;">null</span><span>;
+</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">originalIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;
+</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">newIndex </span><span>= -</span><span style="color:#d08770;">1</span><span>;
 </span><span>
-</span><span style="color:#b48ead;">while </span><span>(</span><span style="color:#bf616a;">i </span><span>&gt; </span><span style="color:#d08770;">0 </span><span>&amp;&amp; </span><span style="color:#bf616a;">j </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) {</span><span>
-</span><span>  </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {</span><span>
-</span><span>    </span><span style="color:#bf616a;">i</span><span>--;</span><span>
-</span><span>    </span><span style="color:#bf616a;">j</span><span>--;</span><span>
-</span><span>  } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] === </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>] + </span><span style="color:#d08770;">1</span><span>) {</span><span>
-</span><span>    </span><span style="color:#65737e;">// Deletion in A</span><span>
-</span><span>    </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>];</span><span>
-</span><span>    </span><span style="color:#bf616a;">originalIndex </span><span>= </span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span>    </span><span style="color:#bf616a;">i</span><span>--;</span><span>
-</span><span>  } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] === </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>] + </span><span style="color:#d08770;">1</span><span>) {</span><span>
-</span><span>    </span><span style="color:#65737e;">// Insertion in B</span><span>
-</span><span>    </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>];</span><span>
-</span><span>    </span><span style="color:#bf616a;">newIndex </span><span>= </span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span>    </span><span style="color:#bf616a;">j</span><span>--;</span><span>
-</span><span>  }</span><span>
-</span><span>}</span><span>
-</span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">newIndex </span><span>=== -</span><span style="color:#d08770;">1 </span><span>&amp;&amp; </span><span style="color:#bf616a;">j </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) </span><span style="color:#bf616a;">newIndex </span><span>= </span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">originalIndex </span><span>=== -</span><span style="color:#d08770;">1 </span><span>&amp;&amp; </span><span style="color:#bf616a;">i </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) </span><span style="color:#bf616a;">originalIndex </span><span>= </span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>;</span><span>
+</span><span style="color:#b48ead;">while </span><span>(</span><span style="color:#bf616a;">i </span><span>&gt; </span><span style="color:#d08770;">0 </span><span>&amp;&amp; </span><span style="color:#bf616a;">j </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) {
+</span><span>  </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {
+</span><span>    </span><span style="color:#bf616a;">i</span><span>--;
+</span><span>    </span><span style="color:#bf616a;">j</span><span>--;
+</span><span>  } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] === </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>] + </span><span style="color:#d08770;">1</span><span>) {
+</span><span>    </span><span style="color:#65737e;">// Deletion in A
+</span><span>    </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>];
+</span><span>    </span><span style="color:#bf616a;">originalIndex </span><span>= </span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>;
+</span><span>    </span><span style="color:#bf616a;">i</span><span>--;
+</span><span>  } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] === </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>] + </span><span style="color:#d08770;">1</span><span>) {
+</span><span>    </span><span style="color:#65737e;">// Insertion in B
+</span><span>    </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>];
+</span><span>    </span><span style="color:#bf616a;">newIndex </span><span>= </span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>;
+</span><span>    </span><span style="color:#bf616a;">j</span><span>--;
+</span><span>  }
+</span><span>}
+</span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">newIndex </span><span>=== -</span><span style="color:#d08770;">1 </span><span>&amp;&amp; </span><span style="color:#bf616a;">j </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) </span><span style="color:#bf616a;">newIndex </span><span>= </span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>;
+</span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">originalIndex </span><span>=== -</span><span style="color:#d08770;">1 </span><span>&amp;&amp; </span><span style="color:#bf616a;">i </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) </span><span style="color:#bf616a;">originalIndex </span><span>= </span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>;
 </span></code></pre>
 <h3 id="i-was-making-this-too-complicated">I was making this too complicated</h3>
 <p>After moving on to work I as actually supposed to be doing for a while I realized I was asking Copilot to generate code for a somewhat less common and more general algorithm. It didn't do that of course, as we saw above, but it seemed to be struggling with my request. Longest Common Subsequence is <em>also</em> an edit distance function, and it's a simpler one that only supports insertion and deletion. There's probably more sample code for this floating around the internet.</p>
 <p>Here is the prompt I used:</p>
-<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>Given two arrays: const A = [1, 2, 3, 4, 5]; const B = [1, 3, 4, 5, 2];</span><span>
-</span><span>Use longest common subsequence to show the single deletion and insertion required to turn A into B</span><span>
-</span><span>I also need to know the indexes at which the insertions and deletions happen</span><span>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>Given two arrays: const A = [1, 2, 3, 4, 5]; const B = [1, 3, 4, 5, 2];
+</span><span>Use longest common subsequence to show the single deletion and insertion required to turn A into B
+</span><span>I also need to know the indexes at which the insertions and deletions happen
 </span></code></pre>
 <p>I received this code in response:</p>
-<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">function </span><span style="color:#8fa1b3;">longestCommonSubsequence</span><span>(</span><span style="color:#bf616a;">A</span><span>, </span><span style="color:#bf616a;">B</span><span>) {</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">m </span><span>= </span><span style="color:#bf616a;">A</span><span>.length;</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">n </span><span>= </span><span style="color:#bf616a;">B</span><span>.length;</span><span>
+<pre data-lang="js" style="background-color:#2b303b;color:#c0c5ce;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#b48ead;">function </span><span style="color:#8fa1b3;">longestCommonSubsequence</span><span>(</span><span style="color:#bf616a;">A</span><span>, </span><span style="color:#bf616a;">B</span><span>) {
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">m </span><span>= </span><span style="color:#bf616a;">A</span><span>.length;
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">n </span><span>= </span><span style="color:#bf616a;">B</span><span>.length;
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Initialize the dp table</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">dp </span><span>= </span><span style="color:#ebcb8b;">Array</span><span>.</span><span style="color:#8fa1b3;">from</span><span>({ length: </span><span style="color:#bf616a;">m </span><span>+ </span><span style="color:#d08770;">1 </span><span>}, () </span><span style="color:#b48ead;">=&gt; </span><span style="color:#ebcb8b;">Array</span><span>(</span><span style="color:#bf616a;">n </span><span>+ </span><span style="color:#d08770;">1</span><span>).</span><span style="color:#8fa1b3;">fill</span><span>(</span><span style="color:#d08770;">0</span><span>));</span><span>
+</span><span>  </span><span style="color:#65737e;">// Initialize the dp table
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">dp </span><span>= </span><span style="color:#ebcb8b;">Array</span><span>.</span><span style="color:#8fa1b3;">from</span><span>({ length: </span><span style="color:#bf616a;">m </span><span>+ </span><span style="color:#d08770;">1 </span><span>}, () </span><span style="color:#b48ead;">=&gt; </span><span style="color:#ebcb8b;">Array</span><span>(</span><span style="color:#bf616a;">n </span><span>+ </span><span style="color:#d08770;">1</span><span>).</span><span style="color:#8fa1b3;">fill</span><span>(</span><span style="color:#d08770;">0</span><span>));
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Fill in the dp table</span><span>
-</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#d08770;">1</span><span>; </span><span style="color:#bf616a;">i </span><span>&lt;= </span><span style="color:#bf616a;">m</span><span>; </span><span style="color:#bf616a;">i</span><span>++) {</span><span>
-</span><span>    </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#d08770;">1</span><span>; </span><span style="color:#bf616a;">j </span><span>&lt;= </span><span style="color:#bf616a;">n</span><span>; </span><span style="color:#bf616a;">j</span><span>++) {</span><span>
-</span><span>      </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {</span><span>
-</span><span>        </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] = </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>] + </span><span style="color:#d08770;">1</span><span>;</span><span>
-</span><span>      } </span><span style="color:#b48ead;">else </span><span>{</span><span>
-</span><span>        </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] = Math.</span><span style="color:#96b5b4;">max</span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>], </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]);</span><span>
-</span><span>      }</span><span>
-</span><span>    }</span><span>
-</span><span>  }</span><span>
+</span><span>  </span><span style="color:#65737e;">// Fill in the dp table
+</span><span>  </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#d08770;">1</span><span>; </span><span style="color:#bf616a;">i </span><span>&lt;= </span><span style="color:#bf616a;">m</span><span>; </span><span style="color:#bf616a;">i</span><span>++) {
+</span><span>    </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#d08770;">1</span><span>; </span><span style="color:#bf616a;">j </span><span>&lt;= </span><span style="color:#bf616a;">n</span><span>; </span><span style="color:#bf616a;">j</span><span>++) {
+</span><span>      </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {
+</span><span>        </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] = </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>] + </span><span style="color:#d08770;">1</span><span>;
+</span><span>      } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>        </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j</span><span>] = Math.</span><span style="color:#96b5b4;">max</span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>], </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]);
+</span><span>      }
+</span><span>    }
+</span><span>  }
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Trace back to find the LCS</span><span>
-</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#bf616a;">m</span><span>, </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#bf616a;">n</span><span>;</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">lcs </span><span>= [];</span><span>
+</span><span>  </span><span style="color:#65737e;">// Trace back to find the LCS
+</span><span>  </span><span style="color:#b48ead;">let </span><span style="color:#bf616a;">i </span><span>= </span><span style="color:#bf616a;">m</span><span>, </span><span style="color:#bf616a;">j </span><span>= </span><span style="color:#bf616a;">n</span><span>;
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">lcs </span><span>= [];
 </span><span>
-</span><span>  </span><span style="color:#b48ead;">while </span><span>(</span><span style="color:#bf616a;">i </span><span>&gt; </span><span style="color:#d08770;">0 </span><span>&amp;&amp; </span><span style="color:#bf616a;">j </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) {</span><span>
-</span><span>    </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {</span><span>
-</span><span>      </span><span style="color:#bf616a;">lcs</span><span>.</span><span style="color:#96b5b4;">unshift</span><span>({ value: </span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>], indexA: </span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>, indexB: </span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1 </span><span>});</span><span>
-</span><span>      </span><span style="color:#bf616a;">i</span><span>--;</span><span>
-</span><span>      </span><span style="color:#bf616a;">j</span><span>--;</span><span>
-</span><span>    } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>] &gt;= </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {</span><span>
-</span><span>      </span><span style="color:#bf616a;">i</span><span>--;</span><span>
-</span><span>    } </span><span style="color:#b48ead;">else </span><span>{</span><span>
-</span><span>      </span><span style="color:#bf616a;">j</span><span>--;</span><span>
-</span><span>    }</span><span>
-</span><span>  }</span><span>
+</span><span>  </span><span style="color:#b48ead;">while </span><span>(</span><span style="color:#bf616a;">i </span><span>&gt; </span><span style="color:#d08770;">0 </span><span>&amp;&amp; </span><span style="color:#bf616a;">j </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) {
+</span><span>    </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>] === </span><span style="color:#bf616a;">B</span><span>[</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {
+</span><span>      </span><span style="color:#bf616a;">lcs</span><span>.</span><span style="color:#96b5b4;">unshift</span><span>({ value: </span><span style="color:#bf616a;">A</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>], indexA: </span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>, indexB: </span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1 </span><span>});
+</span><span>      </span><span style="color:#bf616a;">i</span><span>--;
+</span><span>      </span><span style="color:#bf616a;">j</span><span>--;
+</span><span>    } </span><span style="color:#b48ead;">else if </span><span>(</span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i </span><span>- </span><span style="color:#d08770;">1</span><span>][</span><span style="color:#bf616a;">j</span><span>] &gt;= </span><span style="color:#bf616a;">dp</span><span>[</span><span style="color:#bf616a;">i</span><span>][</span><span style="color:#bf616a;">j </span><span>- </span><span style="color:#d08770;">1</span><span>]) {
+</span><span>      </span><span style="color:#bf616a;">i</span><span>--;
+</span><span>    } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>      </span><span style="color:#bf616a;">j</span><span>--;
+</span><span>    }
+</span><span>  }
 </span><span>
-</span><span>  </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">lcs</span><span>;</span><span>
-</span><span>}</span><span>
+</span><span>  </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">lcs</span><span>;
+</span><span>}
 </span><span>
-</span><span style="color:#65737e;">// Disclaimer - I modified this code to get a similar</span><span>
-</span><span style="color:#65737e;">// result format to the previous functions.</span><span>
-</span><span style="color:#b48ead;">function </span><span style="color:#8fa1b3;">findSingleEdit</span><span>(</span><span style="color:#bf616a;">A</span><span>, </span><span style="color:#bf616a;">B</span><span>) {</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">lcs </span><span>= </span><span style="color:#8fa1b3;">longestCommonSubsequence</span><span>(</span><span style="color:#bf616a;">A</span><span>, </span><span style="color:#bf616a;">B</span><span>);</span><span>
+</span><span style="color:#65737e;">// Disclaimer - I modified this code to get a similar
+</span><span style="color:#65737e;">// result format to the previous functions.
+</span><span style="color:#b48ead;">function </span><span style="color:#8fa1b3;">findSingleEdit</span><span>(</span><span style="color:#bf616a;">A</span><span>, </span><span style="color:#bf616a;">B</span><span>) {
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">lcs </span><span>= </span><span style="color:#8fa1b3;">longestCommonSubsequence</span><span>(</span><span style="color:#bf616a;">A</span><span>, </span><span style="color:#bf616a;">B</span><span>);
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Find the deletion</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">deletion </span><span>= </span><span style="color:#bf616a;">A</span><span>.</span><span style="color:#8fa1b3;">map</span><span>((</span><span style="color:#bf616a;">value</span><span>, </span><span style="color:#bf616a;">index</span><span>) </span><span style="color:#b48ead;">=&gt; </span><span>({ </span><span style="color:#bf616a;">value</span><span>, </span><span style="color:#bf616a;">index </span><span>}))</span><span>
-</span><span>    .</span><span style="color:#8fa1b3;">filter</span><span>(</span><span style="color:#bf616a;">x </span><span style="color:#b48ead;">=&gt; </span><span>!</span><span style="color:#bf616a;">lcs</span><span>.</span><span style="color:#8fa1b3;">some</span><span>(</span><span style="color:#bf616a;">l </span><span style="color:#b48ead;">=&gt; </span><span style="color:#bf616a;">l</span><span>.</span><span style="color:#bf616a;">indexA </span><span>=== </span><span style="color:#bf616a;">x</span><span>.index));</span><span>
+</span><span>  </span><span style="color:#65737e;">// Find the deletion
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">deletion </span><span>= </span><span style="color:#bf616a;">A</span><span>.</span><span style="color:#8fa1b3;">map</span><span>((</span><span style="color:#bf616a;">value</span><span>, </span><span style="color:#bf616a;">index</span><span>) </span><span style="color:#b48ead;">=&gt; </span><span>({ </span><span style="color:#bf616a;">value</span><span>, </span><span style="color:#bf616a;">index </span><span>}))
+</span><span>    .</span><span style="color:#8fa1b3;">filter</span><span>(</span><span style="color:#bf616a;">x </span><span style="color:#b48ead;">=&gt; </span><span>!</span><span style="color:#bf616a;">lcs</span><span>.</span><span style="color:#8fa1b3;">some</span><span>(</span><span style="color:#bf616a;">l </span><span style="color:#b48ead;">=&gt; </span><span style="color:#bf616a;">l</span><span>.</span><span style="color:#bf616a;">indexA </span><span>=== </span><span style="color:#bf616a;">x</span><span>.index));
 </span><span>
-</span><span>  </span><span style="color:#65737e;">// Find the insertion</span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">insertion </span><span>= </span><span style="color:#bf616a;">B</span><span>.</span><span style="color:#8fa1b3;">map</span><span>((</span><span style="color:#bf616a;">value</span><span>, </span><span style="color:#bf616a;">index</span><span>) </span><span style="color:#b48ead;">=&gt; </span><span>({ </span><span style="color:#bf616a;">value</span><span>, </span><span style="color:#bf616a;">index </span><span>}))</span><span>
-</span><span>    .</span><span style="color:#8fa1b3;">filter</span><span>(</span><span style="color:#bf616a;">x </span><span style="color:#b48ead;">=&gt; </span><span>!</span><span style="color:#bf616a;">lcs</span><span>.</span><span style="color:#8fa1b3;">some</span><span>(</span><span style="color:#bf616a;">l </span><span style="color:#b48ead;">=&gt; </span><span style="color:#bf616a;">l</span><span>.</span><span style="color:#bf616a;">indexB </span><span>=== </span><span style="color:#bf616a;">x</span><span>.index));</span><span>
-</span><span>  </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">insertion</span><span>.length === </span><span style="color:#d08770;">0 </span><span>|| </span><span style="color:#bf616a;">deletion</span><span>.length === </span><span style="color:#d08770;">0</span><span>) </span><span style="color:#b48ead;">return</span><span>;</span><span>
+</span><span>  </span><span style="color:#65737e;">// Find the insertion
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">insertion </span><span>= </span><span style="color:#bf616a;">B</span><span>.</span><span style="color:#8fa1b3;">map</span><span>((</span><span style="color:#bf616a;">value</span><span>, </span><span style="color:#bf616a;">index</span><span>) </span><span style="color:#b48ead;">=&gt; </span><span>({ </span><span style="color:#bf616a;">value</span><span>, </span><span style="color:#bf616a;">index </span><span>}))
+</span><span>    .</span><span style="color:#8fa1b3;">filter</span><span>(</span><span style="color:#bf616a;">x </span><span style="color:#b48ead;">=&gt; </span><span>!</span><span style="color:#bf616a;">lcs</span><span>.</span><span style="color:#8fa1b3;">some</span><span>(</span><span style="color:#bf616a;">l </span><span style="color:#b48ead;">=&gt; </span><span style="color:#bf616a;">l</span><span>.</span><span style="color:#bf616a;">indexB </span><span>=== </span><span style="color:#bf616a;">x</span><span>.index));
+</span><span>  </span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#bf616a;">insertion</span><span>.length === </span><span style="color:#d08770;">0 </span><span>|| </span><span style="color:#bf616a;">deletion</span><span>.length === </span><span style="color:#d08770;">0</span><span>) </span><span style="color:#b48ead;">return</span><span>;
 </span><span>
-</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">deletion</span><span>[</span><span style="color:#d08770;">0</span><span>].value;</span><span>
+</span><span>  </span><span style="color:#b48ead;">const </span><span style="color:#bf616a;">movedElement </span><span>= </span><span style="color:#bf616a;">deletion</span><span>[</span><span style="color:#d08770;">0</span><span>].value;
 </span><span>
-</span><span>  </span><span style="color:#b48ead;">return </span><span>{ </span><span style="color:#bf616a;">movedElement</span><span>, from: </span><span style="color:#bf616a;">deletion</span><span>[</span><span style="color:#d08770;">0</span><span>].index, to: </span><span style="color:#bf616a;">insertion</span><span>[</span><span style="color:#d08770;">0</span><span>].index };</span><span>
-</span><span>}</span><span>
+</span><span>  </span><span style="color:#b48ead;">return </span><span>{ </span><span style="color:#bf616a;">movedElement</span><span>, from: </span><span style="color:#bf616a;">deletion</span><span>[</span><span style="color:#d08770;">0</span><span>].index, to: </span><span style="color:#bf616a;">insertion</span><span>[</span><span style="color:#d08770;">0</span><span>].index };
+</span><span>}
 </span></code></pre>
 <p>Something I found interesting here is that my prompt is more broken down into two steps:</p>
 <ul>
