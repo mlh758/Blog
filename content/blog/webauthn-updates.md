@@ -75,17 +75,17 @@ When you are developing the registration and authentication flows, you might not
 passkeys. Not all of them provide an easy way to clean up unused keys. Fortunately, Chrome offers a sandbox for credentials which
 you can enable temporarily while your dev tools are open. From your dev tools screen, open the options menu and select "More tools."
 
-![webauthn menu example](/webauthn-update/webauthn_tool.png)
+![webauthn menu example](/webauthn-updates/webauthn_tool.png)
 
 Once you select it, enable the sandbox. From here, you can configure your authenticator, such as allowing it to support user verification.
 
-![configure example](/webauthn-update/configure.png)
+![configure example](/webauthn-updates/configure.png)
 
 As an added benefit, Chrome will respond to these authenticator requests instantly and not actually require you to perform any authentication
 gestures with them. This means less time entering PINs and more time testing your implementation. Here's how it looks once you've added
 and made use of the authenticator:
 
-![use example](/webauthn-update/example_credential.png)
+![use example](/webauthn-updates/example_credential.png)
 
 ## Discoverable Credentials
 
