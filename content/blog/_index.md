@@ -1,5 +1,6 @@
 +++
 title = "Blog"
+sort_by = "date"
 +++
 
 General programming related thoughts and ideas. You might also like:

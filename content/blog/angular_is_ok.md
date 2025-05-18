@@ -1,63 +1,66 @@
 +++
 title = "Modern Angular is good, actually"
-date = "2025-05-12"
+date = "2025-05-18"
 in_search_index = true
 +++
 
 ## How I ended up on React
 
-My first full-time job as a developer was at a healthcare IT company called Cerner.
-They had a bespoke frontend framework built around jQuery and some fairly complex
-prototype overrides. The backend was a proprietary reporting language called CCL. Maven was
-used as the package manager and build tool.
+I encountered Angular for the first time around 2015. My web experience up to that point
+was primarily with jQuery and a custom toolchain my employer at the time had developed.
+My first impressions were mixed. I liked the structure it imposed on development compared
+to the looser anything-goes approach building large applications with jQuery tended toward.
+On the other hand, documentation was fairly limited, and it wasn't clear to me how all
+the pieces were supposed to fit together. I was junior enough that I also wasn't
+asking the right questions.
 
-It was quite serviceable considering the amount of custom work that went into it. Those
-tools were a major investment by the company. Even still, compared to some of the open
-source tools that were becoming available at the time, the developer experience was lacking.
-Even basic things like building and previewing your changes could be a bit of a process.
+About a year later I was tasked with upgrading one of the Angular projects I had been
+working on to 1.5. This was when Angular first rolled out a component mechanism. The
+shift made a lot of the code I had been working with easier to understand, although
+I still struggled with finding the answers I needed, and none of my
+peers were familiar enough to help out. It felt overwhelmingly big.
 
-At one point I was asked to contribute to some applications that were written by a 
-different team at Cerner. Insetad of being built around this custom UI stack they were
-built using AngularJS. I found the documentation abstruse, especially as a junior
-developer. There were a _lot_ of features that needed to be understood from the framework
-and some confusing modifications made by the codebase. Even still, when compared to what I
-had been working with on other projects, it could be enticingly predictable.
-Another AngularJS project I worked on later was small enough for me to upgrade it to 1.5
-and start making use of components, which simplified things even more.
-
-Not long after, my team was tasked with some greenfield work and I advocated for using AngularJS. I liked the structure it imposed and was already familiar with it.
-My team wanted to use React since it seemed simpler to learn and get started. I lost that
-vote and it was absolutely the right call. The Angular 2 split happened right around that
-time which from the outside seemed like a Python 2 vs 3 moment that nobody on my team
-wanted to deal with. React's JSX syntax was much lighter and more straightforward than
-the template syntax offered by Angular at the time. The impression you got using it was
-that it was _just JavaScript_. For the past ten years I've been generally enjoying it.
-Especially once function components and hooks streamlined much of the development flow.
+When my team was tasked with some greenfield work, I suggested Angular mostly out of
+familiarity, but we went with React instead. It was certainly the right call. Everyone
+got up to speed and became productive quickly. Later, when 16.8 released hooks, things
+seemed even better. There was less boilerplate to sift through, and the component
+lifecycle was easier to reason about.
 
 In the meantime, I've tinkered with tools like Elm and Blazor to get a feel for
 other ideas people have been working on, but I've been content enough with React that I
 haven't felt a compelling reason to look outside the ecosystem for serious projects.
 
-Recently, however, I've been frustrated with the direction of React and the ecosystem.
-There's been a lot of push towards NextJS in an effort to optimize specific metrics in a
-way [that is likely actually harming the user experience.](https://danluu.com/slow-device/).
+Recently, however, I've been frustrated with that direction. There has been a lot of push 
+towards NextJS in an effort to optimize specific metrics in a
+way [that is likely actually harming the user experience.](https://danluu.com/slow-device/)
 Many people also interpreted the post about not needing [effects](https://react.dev/learn/you-might-not-need-an-effect) as the hook being too dangerous to use.
-Much of the current direction of React feels like an on-ramp to hosted services that 
-benefit Vercel.
+Much of this feels like an on-ramp to hosted services that benefit Vercel.
 
-Lately this has coalesced into a trend of gluing ever more tools together into a variety of
-ad hoc frameworks. Even basic operations like calling `fetch` had become taboo to do
-directly. Everything needed to be inside of a custom hook, preferably from a third party.
-Performance issues and weird bugs related to that have piled up as people forget to
-stabilize the outputs of their hooks, neglect cancellation, omit dependencies, and
-muddle the ownership of state trying to appease form libraries.
+This has coalesced into a trend of ad hoc frameworks. Operations like calling `fetch`
+had become taboo to do directly. Everything needs
+to be inside of a custom hook, preferably from a third party.
+Performance issues and weird bugs piled up as people forgot to
+stabilize the outputs of their hooks, neglected cancellation, omitted dependencies, and
+muddled the ownership of state trying to move it into multiple hooks. Input latency
+on forms climbed ever higher.
 
-## If we need a framework anyway...
+## If we want a framework anyway...
 
 The awkwardness of fitting so many tools together, papering over their somewhat incompatible
-APIs, upgrade lifecycles, and various other idiosyncrasies had me thinking back to my Angular
-days and if it may have improved somewhat since the comparatively awkward experience I had
-with 1.5.
+APIs, upgrade lifecycles, and various other idiosyncrasies had me thinking back to my
+Angular days and if it may have improved somewhat since the comparatively awkward
+experience I had with 1.5 and prior.
+
+Some of the old criticisms of Angular still ring true today. There is a _lot_ to learn in 
+the Angular framework. The documentation has improved immensely over the years, and [angular.dev](https://angular.dev) is a great resource. I still think it would benefit from more
+complete examples. Many examples that do exist reference older patterns that are
+being phased out in favor of the newer signals-based APIs.
+
+I felt strongly enough about this that I ended up building a [sample app](https://github.com/mlh758/angular-todo)
+around as many of the new concepts as I could come up with. If I get
+stuck on a concept at work, I have been coming back to that sample to implement some
+version of it to supplement the documentation. Please feel free to open issues or otherwise
+do what you wish with it if you find it useful.
 
 Here are some highlights of tools that come with Angular:
 
@@ -67,32 +70,23 @@ Here are some highlights of tools that come with Angular:
 * Test suite
 * Routing
 * Forms
+* Drag & Drop
 * Authorization via route guards and resolvers
 * HTML/CSS/URL sanitization tools beyond just template safety
 * CLI generators for components, services, etc.
 * Services to manipulate title/meta tags similar to React Helmet
 * Lazy loading components and specific elements similar to Suspense and `lazy`.
 
-Some of the old criticisms of Angular still ring true today. There is a _lot_ to learn in 
-the Angular framework. The documentation has improved immensely over the years and [angular.dev](https://angular.dev) is a great resource. I still think it would benefit from more
-complete examples. Many examples that do exist reference older patterns that are
-being phased out in favor of the newer signals-based APIs.
-
-I felt strongly enough about this that I ended up building a [sample app](https://github.com/mlh758/angular-todo) around as many of the new concepts as possible. If I get
-stuck on a concept at work, I have been coming back to that sample to implement some
-version of it to supplement the documentation. Please feel free to open issues or otherwise
-do what you wish with it if you find it useful.
-
-## Angular from a React Dev's Perspective
+## Angular from a React Developer's Perspective
 
 Angular's component model should be immediately familiar to anyone who has used React. Most
-of the same concepts still apply. The idea of "smart components" and "dumb components",
+of the same concepts still apply. The idea of "smart components" and "dumb components,"
 choosing which component should own that state, and even some of the same ideas about
 what sort of values will be computed on every render still apply.
 
 [Here](https://github.com/mlh758/angular-todo/blob/d69d670b7639e888d35c2a1829495bfa6090a661/src/app/components/button/button.component.ts) is a basic button component:
 
-```
+```ts
 @Component({
   selector: 'app-button',
   imports: [],
@@ -115,7 +109,7 @@ export class ButtonComponent {
 
 and here is the template:
 
-```
+```html
 <button 
   class="button"
   [class.secondary]="variant() === 'secondary'"
@@ -158,6 +152,18 @@ a way to customize some of its attributes. `imports` is where you put external f
 you'll be using in your template. You could declare our template inline here if you wanted
 and there are a bunch of other things you can do in the decorator that I'll save for a
 more detailed post.
+
+
+### Separate Templates
+
+The difference between React and Angular is smaller here than it first appears. React
+components are _mostly_ plain JavaScript but the rendered content (the template, really)
+has to follow certain rules. You _could_ create a variable or log something inside of
+some `{{ braces }}` but your peers might not appreciate it. You have to remember to
+provide a `key` prop on lists of elements you render. Angular takes this slightly
+further by allowing (but not requiring) you to separate the template into another
+file. The templates have some special control flow syntax like `@for` and `@if`
+but otherwise keeps that plain HTML look that JSX is aiming for.
 
 ### Dependency Injection
 
@@ -240,6 +246,23 @@ uncontrolled inputs in React, _especially_ as the forms get larger and more dyna
 I haven't run into similar bottlenecks with the Angular form tools yet. I have no reason
 to go against the grain of the framework, and so far it seems to be serving me well in this
 regard. The API is sensible and it integrates well with your templates.
+
+### More!
+
+There are a bunch of other features floating around in the Angular toolkit. There are
+drag and drop tools, unix-like pipe operators you can define for your templates,
+operators on your routes to guard them or ensure data is available, and so on. Often times
+there is a specific tool that does what you need, or several of them in the box that you
+can compose into the thing that you need.
+
+React only offers the primitives to build up from, and as a result quickly accretes
+additional libraries to support projects. This isn't always a bad thing, React has gone
+through several interesting waves of ideas for how to build projects around those basic
+primitives and that flexibility is likely part of why it is so popular.
+
+For my uses, I think I prefer Angular's slower, steady, whole ecosystem pace of change
+since I tend to end up working on long lived projects where that stability and coherence
+is a major benefit.
 
 ## It's come a long way
 
